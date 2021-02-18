@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+
+  # this will aggregate all the data from the different services
+  hydra-postgres-server:
+    image: hydra-db-growth:latest
+    ports:
+      - "3000:3000"
+    command:
+      server --host=0.0.0.0 --port=3000
+    networks:
+      - intranet
