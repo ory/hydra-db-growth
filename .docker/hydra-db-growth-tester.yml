@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.7'
 
 services:
 
@@ -15,3 +15,6 @@ services:
       tester --host=127.0.0.1 --admin-port=5445 --public-port=5444 --clients=1000 --failure-rate=97
     networks:
       - intranet
+
+networks:
+  intranet:

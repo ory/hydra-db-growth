@@ -1,0 +1,54 @@
+version: '3.7'
+
+services:
+
+  hydra-mysql:
+    image: oryd/hydra:v1.9.2
+    restart: unless-stopped
+    depends_on:
+      - hydra-mysql-migrate
+    ports:
+      - "5444:5444" # Public port
+      - "5445:5445" # Admin port
+      - "5555:5555" # Port for hydra token user
+    environment:
+      - TRACING_PROVIDER=jaeger
+      - TRACING_PROVIDERS_JAEGER_SAMPLING_SERVER_URL=http://jaeger:5778/sampling
+      - TRACING_PROVIDERS_JAEGER_LOCAL_AGENT_ADDRESS=jaeger:6831
+      - TRACING_PROVIDERS_JAEGER_SAMPLING_TYPE=const
+      - TRACING_PROVIDERS_JAEGER_SAMPLING_VALUE=1
+      - DSN=mysql://root:secret@tcp(mysqld:3306)/mysql?max_conns=20&max_idle_conns=4
+    command:
+      serve -c /etc/.config/hydra/hydra-mysql.yml all --dangerous-force-http
+    volumes:
+      - type: bind
+        source: ../.config
+        target: /etc/.config/hydra
+    networks:
+      - intranet
+
+  hydra-mysql-migrate:
+    image: oryd/hydra:v1.9.2
+    restart: on-failure
+    command:
+      migrate -c /etc/.config/hydra/hydra-mysql.yml sql -e --yes
+    environment:
+      - DSN=mysql://root:secret@tcp(mysqld:3306)/mysql?max_conns=20&max_idle_conns=4
+    volumes:
+      - type: bind
+        source: ../.config
+        target: /etc/.config/hydra
+    networks:
+      - intranet
+
+  mysqld:
+    image: mysql:5.7
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+    networks:
+      - intranet
+
+networks:
+  intranet:

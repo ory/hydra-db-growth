@@ -1,0 +1,52 @@
+version: '3.7'
+
+services:
+
+  hydra-postgresql:
+    image: oryd/hydra:v1.9.2
+    restart: unless-stopped
+    depends_on:
+      - hydra-postgresql-migrate
+    ports:
+      - "6444:6444" # Public port
+      - "6445:6445" # Admin port
+      - "6555:6555" # Port for hydra token user
+    environment:
+      - DSN=postgres://hydra:secret@postgresd:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+    command:
+      serve -c /etc/.config/hydra/hydra-postgresql.yml all --dangerous-force-http
+    volumes:
+      - type: bind
+        source: ../.config
+        target: /etc/.config/hydra
+    networks:
+      - intranet
+
+  hydra-postgresql-migrate:
+    image: oryd/hydra:v1.9.2
+    restart: on-failure
+    command:
+      migrate -c /etc/.config/hydra/hydra-postgresql.yml sql -e --yes
+    environment:
+      - DSN=postgres://hydra:secret@postgresd:5432/hydra?sslmode=disable&max_conns=20&max_idle_conns=4
+    volumes:
+      - type: bind
+        source: ../.config
+        target: /etc/.config/hydra
+    networks:
+      - intranet
+
+
+  postgresd:
+    image: postgres:9.6
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=hydra
+      - POSTGRES_PASSWORD=secret
+      - POSTGRES_DB=hydra
+    networks:
+      - intranet
+
+networks:
+  intranet:

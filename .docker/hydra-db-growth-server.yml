@@ -1,4 +1,4 @@
-version: '3.8'
+version: '3.7'
 
 services:
 
@@ -11,3 +11,7 @@ services:
       server --host=0.0.0.0 --port=3000
     networks:
       - intranet
+
+
+networks:
+  intranet:
