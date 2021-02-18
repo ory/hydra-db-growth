@@ -1,11 +1,26 @@
+import asyncio
 import time
 
 import ory_hydra_client as hydra
 import admin_client as ac
 
 
-def initialise(admin_client, public_client):
-    ac.gen_client(admin_client=admin_client)
+def initialise(admin_client, public_client, clients=1000):
+    oauth_clients = []
+
+    async def _call_gen():
+        return ac.gen_client(admin_client=admin_client)
+
+    async def _inner():
+        tasks = []
+        for i in clients:
+            tasks.append(asyncio.ensure_future(_call_gen))
+
+        oauth_clients = await asyncio.gather(*tasks)
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(_inner())
+    return oauth_clients
 
 
 def tester(args):

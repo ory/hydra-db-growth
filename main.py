@@ -15,9 +15,6 @@ def args_parser():
     server_parser = subparsers.add_parser('server', help='Start the web server for reporting and stats')
     server_parser.set_defaults(func=server)
 
-    # parser.add_argument('tester', help='Start the testing programme')
-
-    # tester_parser = parser.add_subparsers().add_parser('tester')
     tester_parser.add_argument("--host", type=str, help="Specify the server host")
     tester_parser.add_argument("--admin-port", type=int, help="Specify the server admin port")
     tester_parser.add_argument("--public-port", type=int,
@@ -29,11 +26,6 @@ def args_parser():
                                help="Specify number of minutes the tester should run for (no. clients)/(no. "
                                     "minutes)= no.clients/pm")
 
-    # parser.add_argument('server', help='Start the web server for reporting and '
-    #                                  'stats')
-
-    # server_parser = parser.add_subparsers().add_parser('server')
-
     server_parser.add_argument('--host', type=str,
                                help='Specify the server binding address e.g. default: 127.0.0.1')
     server_parser.add_argument('--port', type=int,
@@ -43,7 +35,6 @@ def args_parser():
 
 
 def main(args):
-    print(args)
     args.func(args)
 
 
