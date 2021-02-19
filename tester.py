@@ -1,12 +1,21 @@
 import asyncio
 import random
 import time
-
+import requests
 import ory_hydra_client as hydra
 import admin_client as ac
+from authlib.integrations.requests_client import OAuth2Session
+from authlib.common.security import generate_token
 
 
-def initialise(admin_client, public_client, clients=1000, max_time=100):
+def initialise(admin_client, clients=1000, max_time=100):
+    """
+    Create clients for the test to run on
+    :param admin_client:
+    :param clients:
+    :param max_time:
+    :return:
+    """
     oauth_clients = []
 
     client_intervals = []
@@ -35,20 +44,37 @@ def initialise(admin_client, public_client, clients=1000, max_time=100):
     print(f'Generated client sleep intervals: {client_sleeps}')
 
     async def _call_gen():
-        return ac.gen_client(admin_client=admin_client)
+        return admin_client.gen_client()
 
     async def _inner(oauth_clients):
-        tasks = []
         for i in client_intervals:
+            tasks = []
             for y in range(0, i):
                 tasks.append(asyncio.ensure_future(_call_gen()))
-            oauth_clients += await asyncio.gather(*tasks)
-            time.sleep(5)
+
+            t = await asyncio.gather(*tasks)
+            oauth_clients += [x for x in t if x is not None]
+            # time.sleep(5)
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(_inner(oauth_clients))
     loop.close()
     return oauth_clients
+
+
+def initiate_login(clients, host='127.0.0.1', port=4444, scope='openid email'):
+    # initialise authorization code grant type
+    client = OAuth2Session(clients[0]['client_id'], clients[0]['client_secret'], scope=scope)
+    nonce = generate_token()
+    uri, state = client.create_authorization_url(f'http://{host}:{port}/oauth2/auth',
+                                                 redirect_uri='http://127.0.0.1:3000/login')
+    print(uri)
+    # resp = requests.get(uri)
+    # print('get redirect', resp)
+    # token = client.fetch_token(f'http://{host}:{port}/oauth/access_token')
+    # Initialise the login
+    # resp = requests.get(uri)
+    # print(resp)
 
 
 def tester(args):
@@ -90,7 +116,7 @@ def tester(args):
 
     admin_config = hydra.Configuration.get_default_copy()
     admin_config.host = admin_url
-    admin_client = hydra.ApiClient(configuration=admin_config)
+    admin_client = ac.AdminHydra(hydra.ApiClient(configuration=admin_config))
 
     public_config = hydra.Configuration.get_default_copy()
     public_config.host = public_url
@@ -98,12 +124,21 @@ def tester(args):
 
     wait_time = 2
     max_time = 100
+    oauth_clients = []
+
     while True:
         try:
-            oauth_clients = initialise(admin_client, public_client, clients=config["clients"],
+            # we will try initialise clients here
+            # since we are relying on external services, this could fail
+            # so we wrap in a try-catch and wait
+            print("Initialising clients...")
+            oauth_clients = initialise(admin_client, clients=config["clients"],
                                        max_time=config["clients_max_time"])
-            print(f'no. oauth clients created successfully: {len(oauth_clients)}')
-            print(f'clients: ', oauth_clients)
+
+            if len(oauth_clients) < config["clients"]:
+                print(f'not all clients could be created! rerun and check that everything is okay with hydra')
+            else:
+                print(f'no. oauth clients created successfully: {len(oauth_clients)}')
 
             break
         except Exception as e:
@@ -116,3 +151,5 @@ def tester(args):
                 f'({wait_time} > {max_time})')
             break
         time.sleep(wait_time)
+
+    initiate_login(clients=oauth_clients, host=config['host'], port=config['public_port'])

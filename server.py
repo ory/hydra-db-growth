@@ -8,8 +8,14 @@ def hello():
     return "Hello World!"
 
 
-@app.route("/login")
-def login():
+@app.route("/error")
+def error():
+    return "You got an error."
+
+
+@app.route("/login", methods=['POST'])
+def login(req):
+    challenge = req.body.challenge
     return True
 
 
@@ -20,9 +26,9 @@ def server(args):
         }
 
     if args.host:
-        configs.host = args.host
+        configs['host'] = args.host
 
     if args.port:
-        configs.port = args.port
+        configs['port'] = args.port
 
     app.run(port=configs["port"], host=configs["host"])

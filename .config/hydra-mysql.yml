@@ -12,6 +12,7 @@ urls:
   consent: http://127.0.0.1:3000/consent
   login: http://127.0.0.1:3000/login
   logout: http://127.0.0.1:3000/logout
+  error: https://127.0.0.1:3000/error
 
 secrets:
   system:
@@ -25,7 +26,7 @@ oidc:
     pairwise:
       salt: 123124dqwdqwdq41243124
 
-#ttl:
+ttl:
   # Configures how long access tokens are valid.
   #access_token: 1h
   # Configures how long refresh tokens are valid. Set to -1 for refresh tokens to never expire.
@@ -35,4 +36,4 @@ oidc:
   # Configures how long auth codes are valid.
   #auth_code: 1h
   # Configures how long a user login and consent flow may take.
-  #login_consent_request: 1h
+  login_consent_request: 1m
