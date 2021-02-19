@@ -20,6 +20,7 @@ def args_parser():
     tester_parser.add_argument("--public-port", type=int,
                                help="Specify the server public port")
     tester_parser.add_argument("--clients", type=int, help="Specify number of clients")
+    tester_parser.add_argument("--clients-max-time", type=int, help="Max time assigned to client creation (in seconds)")
     tester_parser.add_argument("--failure-rate", type=int,
                                help="Specify (in percentage) the failure rate")
     tester_parser.add_argument("--run-for", type=int,
