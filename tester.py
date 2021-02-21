@@ -1,18 +1,15 @@
 import asyncio
 import random
 import time
-import urllib
+import uuid
 from math import floor
 from urllib.parse import urlparse, parse_qs
 
 import requests
-import ory_hydra_client as hydra
-import admin_client as ac
 from authlib.integrations.requests_client import OAuth2Session
-from authlib.common.security import generate_token
 
 
-def initialise(admin_client, clients=1000, max_time=100):
+def initialise(url, clients=1000, max_time=100):
     """
     Create clients for the test to run on
     :param admin_client:
@@ -48,7 +45,18 @@ def initialise(admin_client, clients=1000, max_time=100):
     print(f'Generated client sleep intervals: {client_sleeps}')
 
     async def _call_gen():
-        return admin_client.gen_client()
+        client_id = str(uuid.uuid4())
+        client_secret = str(uuid.uuid4())
+
+        resp = requests.post(f'{url}/clients', json={'client_id': client_id,
+                                                     'grant_types': ['authorization_code', 'refresh_token'],
+                                                     'scope': 'openid offline',
+                                                     'response_types': ['code'],
+                                                     'redirect_uris': ['http://127.0.0.1:3000/login']})
+        if resp.status_code == 201:
+            return {'client_id': client_id, 'client_secret': client_secret}
+        else:
+            return None
 
     async def _inner(oauth_clients):
         for i in client_intervals:
@@ -62,7 +70,6 @@ def initialise(admin_client, clients=1000, max_time=100):
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(_inner(oauth_clients))
-    loop.close()
     return oauth_clients
 
 
@@ -103,58 +110,9 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
     return clients
 
 
-def tester(args):
-    config = {
-        'clients': 1000,
-        'clients_max_time': 100,
-        'failure_rate': 90,
-        'timeout_reject_ratio': 90,
-        'run_for': 5,
-        'num_cycles': 5,
-        'host': '127.0.0.1',
-        'admin_port': '4445',
-        'public_port': '4444',
-        }
-
-    if args.run_for:
-        config["run_for"] = args.run_for
-
-    if args.num_cycles:
-        config["num_cycles"] = args.num_cycles
-
-    if args.clients:
-        config["clients"] = args.clients
-
-    if args.failure_rate:
-        config["failure_rate"] = args.failure_rate
-
-    if args.timeout_reject_ratio:
-        config["timeout_reject_ratio"] = args.timeout_reject_ratio
-
-    if args.host:
-        config["host"] = args.host
-
-    if args.admin_port:
-        config["admin_port"] = args.admin_port
-
-    if args.public_port:
-        config["public_port"] = args.public_port
-
-    if args.clients_max_time:
-        config["clients_max_time"] = args.clients_max_time
-
-    print('Running with configs:', config)
-
+def _tester(config):
     admin_url = f'http://{config["host"]}:{config["admin_port"]}'
     public_url = f'http://{config["host"]}:{config["public_port"]}'
-
-    admin_config = hydra.Configuration.get_default_copy()
-    admin_config.host = admin_url
-    admin_client = ac.AdminHydra(hydra.ApiClient(configuration=admin_config))
-
-    public_config = hydra.Configuration.get_default_copy()
-    public_config.host = public_url
-    public_client = hydra.ApiClient(configuration=public_config)
 
     wait_time = 2
     max_time = 100
@@ -166,7 +124,7 @@ def tester(args):
             # since we are relying on external services, this could fail
             # so we wrap in a try-catch and wait
             print("Initialising clients...")
-            oauth_clients = initialise(admin_client, clients=config["clients"],
+            oauth_clients = initialise(admin_url, clients=config["clients"],
                                        max_time=config["clients_max_time"])
 
             if len(oauth_clients) < config["clients"]:
@@ -208,4 +166,54 @@ def tester(args):
         print('reject_login', ok)
 
     print('waiting for timeout for these clients:', clients_timeout)
-    time.sleep(20)
+    time.sleep(config["ttl_timeout"])
+
+
+def tester(args):
+    config = {
+        'clients': 1000,
+        'clients_max_time': 100,
+        'failure_rate': 90,
+        'timeout_reject_ratio': 90,
+        'ttl_timeout': 60,
+        'run_for': 5,
+        'num_cycles': 5,
+        'host': '127.0.0.1',
+        'admin_port': '4445',
+        'public_port': '4444',
+        }
+
+    if args.run_for:
+        config["run_for"] = args.run_for
+
+    if args.num_cycles:
+        config["num_cycles"] = args.num_cycles
+
+    if args.clients:
+        config["clients"] = args.clients
+
+    if args.failure_rate:
+        config["failure_rate"] = args.failure_rate
+
+    if args.timeout_reject_ratio:
+        config["timeout_reject_ratio"] = args.timeout_reject_ratio
+
+    if args.ttl_timeout:
+        config["ttl_timeout"] = args.ttl_timeout
+
+    if args.host:
+        config["host"] = args.host
+
+    if args.admin_port:
+        config["admin_port"] = args.admin_port
+
+    if args.public_port:
+        config["public_port"] = args.public_port
+
+    if args.clients_max_time:
+        config["clients_max_time"] = args.clients_max_time
+
+    print('Running with configs:', config)
+
+    for c in range(0, config["num_cycles"]):
+        _tester(config)

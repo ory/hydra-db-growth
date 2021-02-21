@@ -31,6 +31,9 @@ def args_parser():
     tester_parser.add_argument("--num-cycles", type=int,
                                help="Specify the number of cycles the tester should run for.")
 
+    tester_parser.add_argument("--ttl-timeout", type=int,
+                               help="Specify the ttl timeout in seconds.")
+
     server_parser.add_argument('--host', type=str,
                                help='Specify the server binding address e.g. default: 127.0.0.1')
     server_parser.add_argument('--port', type=int,
