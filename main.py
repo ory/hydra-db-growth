@@ -23,9 +23,13 @@ def args_parser():
     tester_parser.add_argument("--clients-max-time", type=int, help="Max time assigned to client creation (in seconds)")
     tester_parser.add_argument("--failure-rate", type=int,
                                help="Specify (in percentage) the failure rate")
+    tester_parser.add_argument("--timeout-reject-ratio", type=int,
+                               help="Specify (in percentage) the timeout rate of a client appose to a client rejecting")
     tester_parser.add_argument("--run-for", type=int,
                                help="Specify number of minutes the tester should run for (no. clients)/(no. "
                                     "minutes)= no.clients/pm")
+    tester_parser.add_argument("--num-cycles", type=int,
+                               help="Specify the number of cycles the tester should run for.")
 
     server_parser.add_argument('--host', type=str,
                                help='Specify the server binding address e.g. default: 127.0.0.1')

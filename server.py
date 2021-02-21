@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 
 app = Flask(__name__)
 
@@ -13,10 +13,11 @@ def error():
     return "You got an error."
 
 
-@app.route("/login", methods=['POST'])
-def login(req):
-    challenge = req.body.challenge
-    return True
+@app.route("/login", methods=['GET'])
+def login():
+    challenge = request.args.get('login_challenge')
+    print(challenge)
+    return "You are getting the login screen"
 
 
 def server(args):
