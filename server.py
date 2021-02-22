@@ -16,11 +16,10 @@ def error():
 @app.route("/login", methods=['GET'])
 def login():
     challenge = request.args.get('login_challenge')
-    print(challenge)
     return "You are getting the login screen"
 
 
-def server(args):
+def server(args, db):
     configs = {
         'port': 3000,
         'host': '127.0.0.1'

@@ -1,5 +1,6 @@
 import argparse
-
+import logging
+import sqlite3
 from tester import tester
 from server import server
 
@@ -34,6 +35,18 @@ def args_parser():
     tester_parser.add_argument("--ttl-timeout", type=int,
                                help="Specify the ttl timeout in seconds.")
 
+    tester_parser.add_argument("--database", type=str, help="The database which should be queried, postgresql or mysql")
+
+    tester_parser.add_argument("--db-host", type=str, help="The database ip")
+
+    tester_parser.add_argument("--db-port", type=int, help="The database port")
+
+    tester_parser.add_argument("--db-username", type=str, help="The database username")
+
+    tester_parser.add_argument("--db-password", type=str, help="The database password")
+
+    tester_parser.add_argument("--db-name", type=str, help="The database name")
+
     server_parser.add_argument('--host', type=str,
                                help='Specify the server binding address e.g. default: 127.0.0.1')
     server_parser.add_argument('--port', type=int,
@@ -42,8 +55,20 @@ def args_parser():
     return parser.parse_args()
 
 
+def init_db():
+    """ create a database connection to a SQLite database """
+    conn = None
+    try:
+        conn = sqlite3.connect('test.db')
+        logging.info('SQLITE3 version: ', sqlite3.version)
+    except sqlite3.Error as e:
+        print(e)
+    return conn
+
+
 def main(args):
-    args.func(args)
+    db = init_db()
+    args.func(args, db)
 
 
 if __name__ == "__main__":
