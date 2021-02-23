@@ -13,3 +13,5 @@ docker-compose -f .docker/hydra-postgresql.yml \
  -f .docker/hydra-db-growth-server.yml \
  -f .docker/jaeger.yml \
 rm -f -v
+
+rm ./test.db

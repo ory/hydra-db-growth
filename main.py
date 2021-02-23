@@ -47,6 +47,8 @@ def args_parser():
 
     tester_parser.add_argument("--db-name", type=str, help="The database name")
 
+    tester_parser.add_argument("--service-name", type=str, help="The service being tested (will be saved in sqlite db)")
+
     server_parser.add_argument('--host', type=str,
                                help='Specify the server binding address e.g. default: 127.0.0.1')
     server_parser.add_argument('--port', type=int,
@@ -58,15 +60,31 @@ def args_parser():
 def init_db():
     """ create a database connection to a SQLite database """
     conn = sqlite3.connect('test.db')
+    conn.execute("CREATE TABLE if not exists Services"
+                 "(SERVICE_ID INTEGER PRIMARY KEY AUTOINCREMENT,"
+                 "SERVICE_NAME  CHAR(50) NOT NULL UNIQUE);")
+
+    conn.execute("CREATE TABLE if not exists Tables"
+                 "(TABLE_ID INTEGER PRIMARY KEY AUTOINCREMENT,"
+                 "TABLE_NAME    CHAR(50)    NOT NULL,"
+                 "SERVICE_ID    INTEGER     NOT NULL,"
+                 "FOREIGN KEY (SERVICE_ID)"
+                 "  REFERENCES Services (SERVICE_ID));")
+
     conn.execute("CREATE TABLE if not exists DBGrowth"
                  "(TIME                 INTEGER     NOT NULL, "
                  "CYCLE                 INTEGER     NOT NULL, "
                  "REGISTERED_CLIENTS    INTEGER     NOT NULL, "
-                 "SERVICE               CHAR(50)    NOT NULL, "
                  "ACTION                CHAR(50)    NOT NULL,"
-                 "TABLE_NAME            CHAR(50)    NOT NULL, "
                  "SIZE                  INTEGER     NOT NULL,"
-                 "SIZE_UNIT             CHAR(50)    NOT NULL);")
+                 "SIZE_UNIT             CHAR(50)    NOT NULL,"
+                 "TABLE_ID              INTEGER     NOT NULL, "
+                 "SERVICE_ID            INTEGER     NOT NULL,"
+                 "FOREIGN KEY (SERVICE_ID)"
+                 "  REFERENCES Services (SERVICE_ID),"
+                 "FOREIGN KEY (TABLE_ID)"
+                 "  REFERENCES Tables (TABLE_ID));")
+
     conn.commit()
     logging.info('Opened sqlite db successfully')
     return conn

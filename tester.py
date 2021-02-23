@@ -20,14 +20,35 @@ test_logger = logging.getLogger('tester')
 def save_result_to_sqlite(db,
                           action,
                           data={'cycle': 0, 'registered_clients': 0, 'service': 'hydra', 'size_unit': 'kb', 'results': []}):
+    cursor = db.cursor()
+    try:
+        cursor.execute("INSERT INTO Services (SERVICE_NAME) VALUES (?)", (data['service'],))
+        db.commit()
+        service_id = db.lastrowid
+    except:
+        cursor.execute("SELECT SERVICE_ID FROM Services WHERE SERVICE_NAME = ?", (data['service'],))
+        service_id = cursor.fetchone()[0]
+        pass
+
     for x in data['results']:
-        db.execute(
-            "INSERT INTO DBGrowth (TIME, CYCLE, REGISTERED_CLIENTS, SERVICE, ACTION, TABLE_NAME, SIZE, SIZE_UNIT) "
+        try:
+            cursor.execute("SELECT TABLE_ID FROM Tables WHERE TABLE_NAME = ? AND SERVICE_ID = ?", (x[0], service_id,))
+            table_id = cursor.fetchone()[0]
+        except:
+            cursor.execute("INSERT INTO Tables (TABLE_NAME, SERVICE_ID) "
+                           "VALUES(?, ?)",
+                           (x[0], service_id))
+            db.commit()
+            table_id = cursor.lastrowid
+
+        cursor.execute(
+            "INSERT INTO DBGrowth (TIME, CYCLE, REGISTERED_CLIENTS, ACTION, SIZE, SIZE_UNIT, SERVICE_ID, TABLE_ID) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (int(time.time()), data['cycle'], data['registered_clients'], data['service'], action, x[0],
-             (int(x[1]) / 1024),
-             data['size_unit'],))
-    return db.commit()
+            (int(time.time()), data['cycle'], data['registered_clients'], action,
+             (int(x[1]) / 1024), data['size_unit'],
+             service_id, table_id,))
+
+    db.commit()
 
 
 def initialise(url, clients=1000, max_time=100):
@@ -217,6 +238,7 @@ def _tester(cycle, config, db, external_db, working_data):
 
 def tester(args, db):
     config = {
+        'service_name': 'hydra',
         'clients': 1000,
         'clients_max_time': 100,
         'failure_rate': 90,
@@ -245,6 +267,9 @@ def tester(args, db):
         'password': '',
         'name': 'hydra',
         }
+
+    if args.service_name:
+        config['service_name'] = args.service_name
 
     if args.database == 'postgresql':
         config['db'] = postgresql_configs
@@ -308,7 +333,7 @@ def tester(args, db):
     working_data = {
         'cycle': 0,
         'registered_clients': 0,
-        'service': 'hydra',
+        'service': config['service_name'],
         'size_unit': 'kb',
         'results': []
         }

@@ -1,5 +1,6 @@
-Flask==0.12.2
-requests==2.23.0
+Flask==1.1.2
+requests==2.25.1
 Authlib==0.15.3
-psycopg2==2.8.5
+psycopg2-binary==2.8.6
 mysql-connector-python==8.0.23
+pandas==1.2.2
