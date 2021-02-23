@@ -57,12 +57,18 @@ def args_parser():
 
 def init_db():
     """ create a database connection to a SQLite database """
-    conn = None
-    try:
-        conn = sqlite3.connect('test.db')
-        logging.info('SQLITE3 version: ', sqlite3.version)
-    except sqlite3.Error as e:
-        print(e)
+    conn = sqlite3.connect('test.db')
+    conn.execute("CREATE TABLE if not exists DBGrowth"
+                 "(TIME                 INTEGER     NOT NULL, "
+                 "CYCLE                 INTEGER     NOT NULL, "
+                 "REGISTERED_CLIENTS    INTEGER     NOT NULL, "
+                 "SERVICE               CHAR(50)    NOT NULL, "
+                 "ACTION                CHAR(50)    NOT NULL,"
+                 "TABLE_NAME            CHAR(50)    NOT NULL, "
+                 "SIZE                  INTEGER     NOT NULL,"
+                 "SIZE_UNIT             CHAR(50)    NOT NULL);")
+    conn.commit()
+    logging.info('Opened sqlite db successfully')
     return conn
 
 

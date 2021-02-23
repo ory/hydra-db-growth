@@ -17,6 +17,19 @@ from database.postgresql import PostgresqlController
 test_logger = logging.getLogger('tester')
 
 
+def save_result_to_sqlite(db,
+                          action,
+                          data={'cycle': 0, 'registered_clients': 0, 'service': 'hydra', 'size_unit': 'kb', 'results': []}):
+    for x in data['results']:
+        db.execute(
+            "INSERT INTO DBGrowth (TIME, CYCLE, REGISTERED_CLIENTS, SERVICE, ACTION, TABLE_NAME, SIZE, SIZE_UNIT) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (int(time.time()), data['cycle'], data['registered_clients'], data['service'], action, x[0],
+             (int(x[1]) / 1024),
+             data['size_unit'],))
+    return db.commit()
+
+
 def initialise(url, clients=1000, max_time=100):
     """
     Create clients for the test to run on
@@ -109,7 +122,7 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
     return clients
 
 
-def _tester(cycle, config, db, external_db):
+def _tester(cycle, config, db, external_db, working_data):
     admin_url = f'http://{config["host"]}:{config["admin_port"]}'
     public_url = f'http://{config["host"]}:{config["public_port"]}'
 
@@ -126,7 +139,9 @@ def _tester(cycle, config, db, external_db):
             oauth_clients = initialise(admin_url, clients=config["clients"],
                                        max_time=config["clients_max_time"])
 
-            db_sizes = external_db.gen_hydra_report()
+            working_data['results'] = db_sizes = external_db.gen_hydra_report()
+            test_logger.info(f'SIZE {working_data["results"]}')
+            save_result_to_sqlite(db, 'clients_created', working_data)
             test_logger.info(f'Cycle: {cycle} | Action: Clients Created | {datetime.now()} | db_size: {db_sizes}')
 
             if len(oauth_clients) < config["clients"]:
@@ -136,7 +151,7 @@ def _tester(cycle, config, db, external_db):
                 test_logger.debug(f'no. oauth clients created successfully: {len(oauth_clients)}')
             break
         except Exception as e:
-            print(e)
+            test_logger.error(e)
             pass
         wait_time *= 2
         if wait_time > max_time:
@@ -144,11 +159,13 @@ def _tester(cycle, config, db, external_db):
                 f'Ending tester due to initialisation failure. Wait time has exceeded max_time: '
                 f'({wait_time} > {max_time})')
             break
+        test_logger.info('retrying...')
         time.sleep(wait_time)
 
     oauth_clients = initiate_clients_login(clients=oauth_clients, host=config['host'], port=config['public_port'])
 
-    db_sizes = external_db.gen_hydra_report()
+    working_data['results'] = db_sizes = external_db.gen_hydra_report()
+    save_result_to_sqlite(db, 'client_login_init', working_data)
     test_logger.info(f'Cycle: {cycle} | Action: After client login init  | {datetime.now()} | db_size: {db_sizes}')
 
     oauth_clients = [x for x in oauth_clients if 'login_challenge' in x]
@@ -173,22 +190,28 @@ def _tester(cycle, config, db, external_db):
 
     async def _inner():
         t = await asyncio.gather(*client_accept_tasks)
-        db_sizes = external_db.gen_hydra_report()
-        test_logger.info(f'Cycle: {cycle} | Action: After client login accept  | {datetime.now()} | db_size: {db_sizes}')
+        working_data['results'] = db_sizes = external_db.gen_hydra_report()
+        save_result_to_sqlite(db, 'after_client_login_accept', working_data)
+        test_logger.info(
+            f'Cycle: {cycle} | Action: After client login accept  | {datetime.now()} | db_size: {db_sizes}')
 
         t2 = await asyncio.gather(*client_reject_tasks)
-        db_sizes = external_db.gen_hydra_report()
-        test_logger.info(f'Cycle: {cycle} | Action: After client login reject  | {datetime.now()} | db_size: {db_sizes}')
+        working_data['results'] = db_sizes = external_db.gen_hydra_report()
+        save_result_to_sqlite(db, 'after_client_login_reject', working_data)
+        test_logger.info(
+            f'Cycle: {cycle} | Action: After client login reject  | {datetime.now()} | db_size: {db_sizes}')
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(_inner())
 
-    db_sizes = external_db.gen_hydra_report()
+    working_data['results'] = db_sizes = external_db.gen_hydra_report()
+    save_result_to_sqlite(db, 'before_client_timeout', working_data)
     test_logger.info(f'Cycle: {cycle} | Action: Before client timeout  | {datetime.now()} | db_size: {db_sizes}')
 
     test_logger.info(f'waiting for timeout of {len(clients_timeout)} clients')
     time.sleep(config["ttl_timeout"])
-    db_sizes = external_db.gen_hydra_report()
+    working_data['results'] = db_sizes = external_db.gen_hydra_report()
+    save_result_to_sqlite(db, 'after_client_timeout', working_data)
     test_logger.info(f'Cycle: {cycle} | Action: After client timeout  | {datetime.now()} | db_size: {db_sizes}')
 
 
@@ -282,5 +305,17 @@ def tester(args, db):
 
     logging.info(f'db connection established {external_db is not None}')
 
+    working_data = {
+        'cycle': 0,
+        'registered_clients': 0,
+        'service': 'hydra',
+        'size_unit': 'kb',
+        'results': []
+        }
+
     for c in range(1, config["num_cycles"]):
-        _tester(c, config, db, external_db)
+        working_data['cycle'] = c
+        working_data['registered_clients'] = external_db.get_registered_clients()
+        test_logger.info(f'registered clients {working_data["registered_clients"]}')
+
+        _tester(c, config, db, external_db, working_data)

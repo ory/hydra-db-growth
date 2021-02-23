@@ -31,3 +31,10 @@ class MysqlController:
             , (self.connection['name'],)
             )
         return cursor.fetchall()
+
+    def get_registered_clients(self):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM hydra_client"
+            )
+        return cursor.fetchone()

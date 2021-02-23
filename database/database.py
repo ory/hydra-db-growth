@@ -15,3 +15,6 @@ class DatabaseController:
 
     def gen_hydra_report(self):
         return self.database.table_size_query()
+
+    def get_registered_clients(self):
+        return self.database.get_registered_clients()[0]

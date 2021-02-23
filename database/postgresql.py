@@ -24,8 +24,15 @@ class PostgresqlController:
         # pg_total_relation_size(relid) will get the total size + index of the table
         # pg_total_size(relid) will only get the total size of the table
         cursor.execute(
-            "SELECT relname as table_name, pg_size_pretty(pg_total_relation_size(relid)) as data_size " +
+            "SELECT relname as table_name, pg_total_relation_size(relid) as data_size " +
             "FROM pg_catalog.pg_statio_user_tables " +
             "ORDER BY pg_relation_size(relid) desc")
 
         return cursor.fetchall()
+
+    def get_registered_clients(self):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) FROM hydra_client"
+            )
+        return cursor.fetchone()
