@@ -14,4 +14,4 @@ class DatabaseController:
         self.database = database
 
     def gen_hydra_report(self):
-        self.database.table_size_query()
+        return self.database.table_size_query()

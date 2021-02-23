@@ -26,5 +26,6 @@ class PostgresqlController:
         cursor.execute(
             "SELECT relname as table_name, pg_size_pretty(pg_total_relation_size(relid)) as data_size " +
             "FROM pg_catalog.pg_statio_user_tables " +
-            "ORDER BY pg_relation_size(relid) desc;")
+            "ORDER BY pg_relation_size(relid) desc")
+
         return cursor.fetchall()

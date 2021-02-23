@@ -67,6 +67,8 @@ def init_db():
 
 
 def main(args):
+    logging.basicConfig()
+    logging.root.setLevel(logging.INFO)
     db = init_db()
     args.func(args, db)
 

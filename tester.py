@@ -3,6 +3,7 @@ import logging
 import random
 import time
 import uuid
+from datetime import datetime
 from math import floor
 from urllib.parse import urlparse, parse_qs
 
@@ -12,6 +13,8 @@ from authlib.integrations.requests_client import OAuth2Session
 from database.database import DatabaseController
 from database.mysql import MysqlController
 from database.postgresql import PostgresqlController
+
+test_logger = logging.getLogger('tester')
 
 
 def initialise(url, clients=1000, max_time=100):
@@ -46,8 +49,8 @@ def initialise(url, clients=1000, max_time=100):
         added_sleeps += rc
         client_sleeps.append(rc)
 
-    logging.info(f'Generated clients in groups: {client_intervals}')
-    logging.info(f'Generated client sleep intervals: {client_sleeps}')
+    test_logger.info(f'Generated clients in groups: {client_intervals}')
+    test_logger.info(f'Generated client sleep intervals: {client_sleeps}')
 
     async def _call_gen():
         client_id = str(uuid.uuid4())
@@ -102,11 +105,11 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
             login_challenge = parse_qs(urlparse(resp.url).query)['login_challenge'][0]
             clients[i]['login_challenge'] = login_challenge
         else:
-            logging.error('Login redirect failed for client_id: ', clients[0]['client_id'])
+            test_logger.error('Login redirect failed for client_id: ', clients[0]['client_id'])
     return clients
 
 
-def _tester(config, db, external_db):
+def _tester(cycle, config, db, external_db):
     admin_url = f'http://{config["host"]}:{config["admin_port"]}'
     public_url = f'http://{config["host"]}:{config["public_port"]}'
 
@@ -119,30 +122,34 @@ def _tester(config, db, external_db):
             # we will try initialise clients here
             # since we are relying on external services, this could fail
             # so we wrap in a try-catch and wait
-            logging.info("Initialising clients...")
+            test_logger.info("Initialising clients...")
             oauth_clients = initialise(admin_url, clients=config["clients"],
                                        max_time=config["clients_max_time"])
 
             db_sizes = external_db.gen_hydra_report()
-            logging.info(db_sizes)
+            test_logger.info(f'Cycle: {cycle} | Action: Clients Created | {datetime.now()} | db_size: {db_sizes}')
 
             if len(oauth_clients) < config["clients"]:
-                logging.error('not all clients could be created! rerun and check that everything is okay with hydra')
+                test_logger.error(
+                    'not all clients could be created! rerun and check that everything is okay with hydra')
             else:
-                logging.debug(f'no. oauth clients created successfully: {len(oauth_clients)}')
+                test_logger.debug(f'no. oauth clients created successfully: {len(oauth_clients)}')
             break
         except Exception as e:
             print(e)
             pass
         wait_time *= 2
         if wait_time > max_time:
-            logging.error(
+            test_logger.error(
                 f'Ending tester due to initialisation failure. Wait time has exceeded max_time: '
                 f'({wait_time} > {max_time})')
             break
         time.sleep(wait_time)
 
     oauth_clients = initiate_clients_login(clients=oauth_clients, host=config['host'], port=config['public_port'])
+
+    db_sizes = external_db.gen_hydra_report()
+    test_logger.info(f'Cycle: {cycle} | Action: After client login init  | {datetime.now()} | db_size: {db_sizes}')
 
     oauth_clients = [x for x in oauth_clients if 'login_challenge' in x]
     c = floor(len(oauth_clients) * (config['failure_rate'] / 100))
@@ -166,13 +173,20 @@ def _tester(config, db, external_db):
 
     async def _inner():
         t = await asyncio.gather(*client_accept_tasks)
+        db_sizes = external_db.gen_hydra_report()
+        test_logger.info(f'Cycle: {cycle} | Action: After client login accept  | {datetime.now()} | db_size: {db_sizes}')
+
         t2 = await asyncio.gather(*client_reject_tasks)
+        db_sizes = external_db.gen_hydra_report()
+        test_logger.info(f'Cycle: {cycle} | Action: After client login reject  | {datetime.now()} | db_size: {db_sizes}')
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(_inner())
 
-    logging.info(f'waiting for timeout for {len(clients_timeout)} clients')
+    test_logger.info(f'waiting for timeout for {len(clients_timeout)} clients')
     time.sleep(config["ttl_timeout"])
+    db_sizes = external_db.gen_hydra_report()
+    test_logger.info(f'Cycle: {cycle} | Action: After client timeout  | {datetime.now()} | db_size: {db_sizes}')
 
 
 def tester(args, db):
@@ -256,12 +270,14 @@ def tester(args, db):
     if args.clients_max_time:
         config["clients_max_time"] = args.clients_max_time
 
-    logging.info('Running with configs:', config)
+    test_logger.info(f'Running with configs: {config}')
 
     if args.database == 'postgresql':
         external_db = DatabaseController(PostgresqlController(connection=config['db']))
     else:
         external_db = DatabaseController(MysqlController(connection=config['db']))
 
+    logging.info(f'db connection established {external_db is not None}')
+
     for c in range(1, config["num_cycles"]):
-        _tester(config, db, external_db)
+        _tester(c, config, db, external_db)
