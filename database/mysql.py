@@ -1,3 +1,5 @@
+import logging
+
 import mysql.connector
 
 
@@ -22,9 +24,10 @@ class MysqlController:
     def table_size_query(self):
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT TABLE_NAME AS `Table`, ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024) AS `Size (MB)` " +
+            "SELECT TABLE_NAME AS `Table`, ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024) AS `Size (KB)` " +
             "FROM information_schema.TABLES " +
-            "WHERE TABLE_SCHEMA = '%s' " +
-            "ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC;"
-            , self.database
+            "WHERE TABLE_SCHEMA = %s " +
+            "ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC"
+            , (self.connection['name'],)
             )
+        return cursor.fetchall()

@@ -183,7 +183,10 @@ def _tester(cycle, config, db, external_db):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(_inner())
 
-    test_logger.info(f'waiting for timeout for {len(clients_timeout)} clients')
+    db_sizes = external_db.gen_hydra_report()
+    test_logger.info(f'Cycle: {cycle} | Action: Before client timeout  | {datetime.now()} | db_size: {db_sizes}')
+
+    test_logger.info(f'waiting for timeout of {len(clients_timeout)} clients')
     time.sleep(config["ttl_timeout"])
     db_sizes = external_db.gen_hydra_report()
     test_logger.info(f'Cycle: {cycle} | Action: After client timeout  | {datetime.now()} | db_size: {db_sizes}')
