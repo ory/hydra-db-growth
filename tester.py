@@ -45,7 +45,7 @@ def save_result_to_sqlite(db,
             "INSERT INTO DBGrowth (TIME, CYCLE, REGISTERED_CLIENTS, ACTION, SIZE, SIZE_UNIT, SERVICE_ID, TABLE_ID) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (int(time.time()), data['cycle'], data['registered_clients'], action,
-             (int(x[1]) / 1024), data['size_unit'],
+             (int(x[1]) / 1024 / 1024), data['size_unit'],
              service_id, table_id,))
 
     db.commit()
@@ -127,20 +127,32 @@ async def reject_login(host, port, login_challenge):
 
 
 def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid offline'):
-    for i in range(0, len(clients)):
-        # initialise authorization code grant type
-        client = OAuth2Session(client_id=clients[0]['client_id'], client_secret=clients[0]['client_secret'],
-                               scope=scope)
-        uri, state = client.create_authorization_url(f'http://{host}:{port}/oauth2/auth',
-                                                     redirect_uri='http://127.0.0.1:3000/login')
+    async def _login(client):
+        c = OAuth2Session(client_id=clients[0]['client_id'], client_secret=clients[0]['client_secret'],
+                          scope=scope)
+        uri, state = c.create_authorization_url(f'http://{host}:{port}/oauth2/auth',
+                                                redirect_uri='http://127.0.0.1:3000/login')
 
         resp = requests.get(uri)
         if resp.ok:
-            login_challenge = parse_qs(urlparse(resp.url).query)['login_challenge'][0]
-            clients[i]['login_challenge'] = login_challenge
+            client['login_challenge'] = parse_qs(urlparse(resp.url).query)['login_challenge'][0]
+            return client
         else:
             test_logger.error('Login redirect failed for client_id: ', clients[0]['client_id'])
-    return clients
+            return None
+
+    tasks = []
+    logged_in_clients = []
+    for i in range(0, len(clients)):
+        tasks.append(asyncio.ensure_future(_login(clients[i])))
+
+    async def _inner(logged_in_clients):
+        logged_in_clients += [x for x in await asyncio.gather(*tasks) if x is not None]
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(_inner(logged_in_clients))
+
+    return logged_in_clients
 
 
 def _tester(cycle, config, db, external_db, working_data):
@@ -229,7 +241,7 @@ def _tester(cycle, config, db, external_db, working_data):
     save_result_to_sqlite(db, 'before_client_timeout', working_data)
     test_logger.info(f'Cycle: {cycle} | Action: Before client timeout  | {datetime.now()} | db_size: {db_sizes}')
 
-    test_logger.info(f'waiting for timeout of {len(clients_timeout)} clients')
+    test_logger.info(f'waiting for {config["ttl_timeout"]}s timeout of {len(clients_timeout)} clients')
     time.sleep(config["ttl_timeout"])
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_timeout', working_data)

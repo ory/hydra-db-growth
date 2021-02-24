@@ -24,7 +24,7 @@ class MysqlController:
     def table_size_query(self):
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT TABLE_NAME AS `Table`, ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024) AS `Size (KB)` " +
+            "SELECT TABLE_NAME AS `Table`, ROUND((DATA_LENGTH + INDEX_LENGTH)) AS `Size (Bytes)` " +
             "FROM information_schema.TABLES " +
             "WHERE TABLE_SCHEMA = %s " +
             "ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC"

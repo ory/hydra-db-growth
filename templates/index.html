@@ -3,8 +3,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.bundle.min.js"></script>
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.css"/>
 </head>
-<body>
-<h1>Chart Data on Hydra growth per service</h1>
+<body style="max-height: 80vh;max-width: 80vw;">
+<h1 align="center">Chart Data on Hydra growth per service</h1>
 <canvas id="myChart" width="400" height="400"></canvas>
 <script>
     var ctx = document.getElementById('myChart');
@@ -14,7 +14,7 @@
         .then((data) => {
             console.debug(data);
             var myChart = new Chart(ctx, {
-                title: 'Hydra DB Growth over time in KB',
+                title: 'Hydra DB Growth over time in MB',
                 type: 'line',
                 data: {
                     datasets: data
@@ -25,9 +25,9 @@
                         xAxes: [{
                             type: 'time',
                             time: {
-                                unit: 'second'
+                                unit: 'minute'
                             },
-                            distribution: 'series'
+                            distribution: 'linear'
                         }]
                     }
                 }
