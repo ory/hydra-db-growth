@@ -40,7 +40,8 @@ def save_result_to_sqlite(db,
         except:
             pass
 
-        cursor.execute("SELECT TABLE_ID FROM Tables WHERE TABLE_NAME = ? AND SERVICE_ID = ?", (f'{data["service"]}_{x[0]}', service_id,))
+        cursor.execute("SELECT TABLE_ID FROM Tables WHERE TABLE_NAME = ? AND SERVICE_ID = ?",
+                       (f'{data["service"]}_{x[0]}', service_id,))
         table_id = cursor.fetchone()[0]
 
         cursor.execute(
@@ -125,6 +126,12 @@ async def accept_login(host, port, login_challenge, client_id):
 async def reject_login(host, port, login_challenge):
     resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/reject?login_challenge={login_challenge}',
                         json={})
+    return resp.ok
+
+
+async def flush(host, port):
+    test_logger.info("Running Flush...")
+    resp = requests.post(f'http://{host}:{port}/oauth2/flush', json={})
     return resp.ok
 
 
@@ -252,6 +259,7 @@ def _tester(cycle, config, db, external_db, working_data):
 
 def tester(args, db):
     config = {
+        'run_flush': False,
         'service_name': 'hydra',
         'clients': 1000,
         'clients_max_time': 100,
@@ -335,6 +343,9 @@ def tester(args, db):
     if args.clients_max_time:
         config["clients_max_time"] = args.clients_max_time
 
+    if args.run_flush:
+        config["run_flush"] = args.run_flush
+
     test_logger.info(f'Running with configs: {config}')
 
     if args.database == 'postgresql':
@@ -352,9 +363,13 @@ def tester(args, db):
         'results': []
         }
 
-    for c in range(1, config["num_cycles"]):
+    for c in range(0, config["num_cycles"]):
         working_data['cycle'] = c
         working_data['registered_clients'] = external_db.get_registered_clients()
         test_logger.info(f'registered clients {working_data["registered_clients"]}')
-
         _tester(c, config, db, external_db, working_data)
+        ok = flush(config["host"], config["admin_port"])
+        if ok:
+            test_logger.info("Flush successful")
+        else:
+            test_logger.error("Flush failed")

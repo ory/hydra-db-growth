@@ -35,7 +35,8 @@ def args_parser():
     tester_parser.add_argument("--ttl-timeout", type=int,
                                help="Specify the ttl timeout in seconds.")
 
-    tester_parser.add_argument("--database", type=str, help="The database which should be queried, postgresql or mysql")
+    tester_parser.add_argument("--database", type=str,
+                               help="The database which should be queried, e.g. postgresql or mysql")
 
     tester_parser.add_argument("--db-host", type=str, help="The database ip")
 
@@ -45,9 +46,11 @@ def args_parser():
 
     tester_parser.add_argument("--db-password", type=str, help="The database password")
 
-    tester_parser.add_argument("--db-name", type=str, help="The database name")
+    tester_parser.add_argument("--db-name", type=str, help="The database name e.g. hydra")
 
     tester_parser.add_argument("--service-name", type=str, help="The service being tested (will be saved in sqlite db)")
+
+    tester_parser.add_argument("--run-flush", type=bool, default=True, help="Run the flush command after each cycle")
 
     server_parser.add_argument('--host', type=str,
                                help='Specify the server binding address e.g. default: 127.0.0.1')
