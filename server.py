@@ -15,8 +15,20 @@ def hello():
     return render_template('index.html')
 
 
-@app.route("/data")
+@app.route("/raw")
 def raw():
+    with sqlite3.connect('test.db') as con:
+        cursor = con.cursor()
+        cursor.execute(
+            "SELECT * "
+            "FROM DBGrowth ")
+
+        data = cursor.fetchall()
+    return json.dumps(data)
+
+
+@app.route("/data")
+def data():
     with sqlite3.connect('test.db') as con:
         cursor = con.cursor()
         cursor.execute(
@@ -25,7 +37,7 @@ def raw():
             "DBGrowth.SIZE "
             "FROM DBGrowth "
             "INNER JOIN Services ON Services.SERVICE_ID = DBGrowth.SERVICE_ID "
-            "INNER JOIN Tables ON Tables.SERVICE_ID = Services.SERVICE_ID")
+            "INNER JOIN Tables ON Tables.TABLE_ID = DBGrowth.TABLE_ID")
 
         data = cursor.fetchall()
 

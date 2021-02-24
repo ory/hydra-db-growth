@@ -5,14 +5,14 @@ services:
   hydra-postgres-growth:
     image: hydra-db-growth:latest
     command:
-      tester --host=hydra-postgresql --admin-port=6445 --public-port=6444 --clients=1000000 --failure-rate=97 --database=postgresql --db-host=postgresd --db-username=hydra --db-password=secret --db-name=hydra --service-name=hydra-postgresql
+      tester --host=hydra-postgresql --admin-port=6445 --public-port=6444 --clients=100 --failure-rate=97 --database=postgresql --db-host=postgresd --db-username=hydra --db-password=secret --db-name=hydra --service-name=hydra-postgresql
     networks:
       - intranet
 
   hydra-mysql-growth:
     image: hydra-db-growth:latest
     command:
-      tester --host=hydra-mysql --admin-port=5445 --public-port=5444 --clients=1000000 --failure-rate=97 --database=mysql --db-host=mysqld --db-username=root --db-password=secret --db-name=mysql --service-name=hydra-mysql
+      tester --host=hydra-mysql --admin-port=5445 --public-port=5444 --clients=100 --failure-rate=97 --database=mysql --db-host=mysqld --db-username=root --db-password=secret --db-name=mysql --service-name=hydra-mysql
     networks:
       - intranet
 

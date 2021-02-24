@@ -19,27 +19,29 @@ test_logger = logging.getLogger('tester')
 
 def save_result_to_sqlite(db,
                           action,
-                          data={'cycle': 0, 'registered_clients': 0, 'service': 'hydra', 'size_unit': 'kb', 'results': []}):
+                          data={'cycle': 0, 'registered_clients': 0, 'service': 'hydra', 'size_unit': 'MB', 'results': []}):
     cursor = db.cursor()
+
     try:
         cursor.execute("INSERT INTO Services (SERVICE_NAME) VALUES (?)", (data['service'],))
         db.commit()
-        service_id = db.lastrowid
     except:
-        cursor.execute("SELECT SERVICE_ID FROM Services WHERE SERVICE_NAME = ?", (data['service'],))
-        service_id = cursor.fetchone()[0]
         pass
+
+    cursor.execute("SELECT SERVICE_ID FROM Services WHERE SERVICE_NAME = ?", (data['service'],))
+    service_id = cursor.fetchone()[0]
 
     for x in data['results']:
         try:
-            cursor.execute("SELECT TABLE_ID FROM Tables WHERE TABLE_NAME = ? AND SERVICE_ID = ?", (x[0], service_id,))
-            table_id = cursor.fetchone()[0]
-        except:
             cursor.execute("INSERT INTO Tables (TABLE_NAME, SERVICE_ID) "
                            "VALUES(?, ?)",
-                           (x[0], service_id))
+                           (f'{data["service"]}_{x[0]}', service_id))
             db.commit()
-            table_id = cursor.lastrowid
+        except:
+            pass
+
+        cursor.execute("SELECT TABLE_ID FROM Tables WHERE TABLE_NAME = ? AND SERVICE_ID = ?", (f'{data["service"]}_{x[0]}', service_id,))
+        table_id = cursor.fetchone()[0]
 
         cursor.execute(
             "INSERT INTO DBGrowth (TIME, CYCLE, REGISTERED_CLIENTS, ACTION, SIZE, SIZE_UNIT, SERVICE_ID, TABLE_ID) "
@@ -48,7 +50,7 @@ def save_result_to_sqlite(db,
              (int(x[1]) / 1024 / 1024), data['size_unit'],
              service_id, table_id,))
 
-    db.commit()
+        db.commit()
 
 
 def initialise(url, clients=1000, max_time=100):
@@ -94,7 +96,7 @@ def initialise(url, clients=1000, max_time=100):
                                                      'grant_types': ['authorization_code', 'refresh_token'],
                                                      'scope': 'openid offline',
                                                      'response_types': ['code'],
-                                                     'redirect_uris': ['http://127.0.0.1:3000/login']})
+                                                     'redirect_uris': ['http://0.0.0.0:3000/login']})
         if resp.status_code == 201:
             return {'client_id': client_id, 'client_secret': client_secret}
         else:
@@ -131,7 +133,7 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
         c = OAuth2Session(client_id=clients[0]['client_id'], client_secret=clients[0]['client_secret'],
                           scope=scope)
         uri, state = c.create_authorization_url(f'http://{host}:{port}/oauth2/auth',
-                                                redirect_uri='http://127.0.0.1:3000/login')
+                                                redirect_uri='http://0.0.0.0:3000/login')
 
         resp = requests.get(uri)
         if resp.ok:
@@ -346,7 +348,7 @@ def tester(args, db):
         'cycle': 0,
         'registered_clients': 0,
         'service': config['service_name'],
-        'size_unit': 'kb',
+        'size_unit': 'MB',
         'results': []
         }
 

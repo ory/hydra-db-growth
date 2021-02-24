@@ -66,10 +66,11 @@ def init_db():
 
     conn.execute("CREATE TABLE if not exists Tables"
                  "(TABLE_ID INTEGER PRIMARY KEY AUTOINCREMENT,"
-                 "TABLE_NAME    CHAR(50)    NOT NULL,"
+                 "TABLE_NAME    CHAR(50) UNIQUE,"
                  "SERVICE_ID    INTEGER     NOT NULL,"
                  "FOREIGN KEY (SERVICE_ID)"
-                 "  REFERENCES Services (SERVICE_ID));")
+                 "  REFERENCES Services (SERVICE_ID)"
+                 ");")
 
     conn.execute("CREATE TABLE if not exists DBGrowth"
                  "(TIME                 INTEGER     NOT NULL, "

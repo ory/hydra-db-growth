@@ -3,9 +3,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.bundle.min.js"></script>
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.css"/>
 </head>
-<body style="max-height: 80vh;max-width: 80vw;">
+<body>
 <h1 align="center">Chart Data on Hydra growth per service</h1>
-<canvas id="myChart" width="400" height="400"></canvas>
+<div style="height: 100vh; width: 100vw; max-height: 100vh;max-width: 100vw;">
+    <canvas id="myChart" width="400" height="400"></canvas>
+</div>
+
 <script>
     var ctx = document.getElementById('myChart');
     var host = window.location.origin;
