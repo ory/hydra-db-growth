@@ -1,10 +1,9 @@
 import json
-import logging
+import random
 import sqlite3
-from datetime import datetime
-import pandas as pd
 
-from flask import Flask, request, render_template, session
+import pandas as pd
+from flask import Flask, request, render_template
 
 app = Flask(__name__)
 database = None
@@ -51,35 +50,15 @@ def data():
         for x in unique_service_table:
             vals = df.loc[df['service_table'] == x]
             del vals['service_table']
-            datasets = datasets.append({'label': x, 'type': 'line', 'data': vals}, ignore_index=True, sort=False)
+            number_of_colors = 1
 
-        # for x in df:
-        #     df_by_table = df_by_table.append({'service_name': df['service_name'], x})
+            color = ["#" + ''.join([random.choice('0123456789ABCDEF') for j in range(6)])
+                     for i in range(number_of_colors)]
 
-        # for x in data:
-        #     cursor.execute(
-        #         "SELECT TIME, CYCLE, REGISTERED_CLIENTS, SERVICE, ACTION, SIZE, SIZE_UNIT FROM DBGrowth "
-        #         "WHERE TABLE_NAME = ?"
-        #         "GROUP BY SERVICE "
-        #         "ORDER BY TIME asc", (x[0],))
-        #
-        #     tables_data = cursor.fetchall()
-        #     df = pd.DataFrame(tables_data,
-        #                       columns=['time', 'cycle', 'registered_clients', 'service', 'action', 'size',
-        #                                'size_unit'])
-        #
-        #     df_by_table = df_by_table.append({'y': x[0], 'x': df}, ignore_index=True, sort=False)
+            datasets = datasets.append({'label': x, 'type': 'line', 'data': vals, 'borderColor': color[0]},
+                                       ignore_index=True, sort=False)
 
     return datasets.to_json(orient='records')
-
-    data = cursor.fetchall()
-    registered_clients = []
-    transformed = []
-    for x in data:
-        date = datetime.utcfromtimestamp(int(x[0])).strftime('%Y-%m-%d %H:%M:%S')
-        transformed.append({'x': date, 'y': x[7]})
-        registered_clients.append({'cycle': x[1], 'clients': [2]})
-    return json.dumps(data)
 
 
 @app.route("/error")
@@ -108,4 +87,4 @@ def server(args, db):
     global database
     database = db
 
-    app.run(port=configs["port"], host=configs["host"])
+    app.run(port=configs["port"], host=configs["host"], threaded=True)
