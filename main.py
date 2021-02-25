@@ -50,7 +50,7 @@ def args_parser():
 
     tester_parser.add_argument("--service-name", type=str, help="The service being tested (will be saved in sqlite db)")
 
-    tester_parser.add_argument("--run-flush", type=bool, default=True, help="Run the flush command after each cycle")
+    tester_parser.add_argument("--run-flush", action='store_true', help="Run the flush command after each cycle")
 
     server_parser.add_argument('--host', type=str,
                                help='Specify the server binding address e.g. default: 127.0.0.1')

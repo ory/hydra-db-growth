@@ -5,9 +5,18 @@
 </head>
 <body>
 <h1 align="center">Chart Data on Hydra growth per service</h1>
+<button onclick="download()">Download Canvas</button>
 <div style="height: 100vh; width: 100vw; max-height: 100vh;max-width: 100vw;">
     <canvas style="background-color:#ffffff;" id="myChart" width="400" height="400"></canvas>
 </div>
+
+<script>
+    function download(){
+        var canvas = document.getElementById('myChart');
+        var image = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");  // here is the most important part because if you dont replace you will get a DOM 18 exception.
+    window.location.href=image; // it will save locally
+    }
+</script>
 
 <script>
     var ctx = document.getElementById('myChart');

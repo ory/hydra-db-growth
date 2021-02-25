@@ -1,4 +1,4 @@
-import asyncio
+import concurrent.futures
 import logging
 import random
 import time
@@ -89,7 +89,7 @@ def initialise(url, clients=1000, max_time=100):
     test_logger.info(f'Generated clients in groups: {client_intervals}')
     test_logger.info(f'Generated client sleep intervals: {client_sleeps}')
 
-    async def _call_gen():
+    def _call_gen():
         client_id = str(uuid.uuid4())
         client_secret = str(uuid.uuid4())
 
@@ -103,41 +103,42 @@ def initialise(url, clients=1000, max_time=100):
         else:
             return None
 
-    async def _inner(oauth_clients):
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+        futures = []
         for i in client_intervals:
-            tasks = []
             for y in range(0, i):
-                tasks.append(asyncio.ensure_future(_call_gen()))
+                futures.append(executor.submit(_call_gen))
 
-            t = await asyncio.gather(*tasks)
-            oauth_clients += [x for x in t if x is not None]
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                oauth_clients.append(future.result())
+            except:
+                pass
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(_inner(oauth_clients))
     return oauth_clients
 
 
-async def accept_login(host, port, login_challenge, client_id):
+def accept_login(host, port, login_challenge, client_id):
     resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/accept?login_challenge={login_challenge}',
                         json={'subject': client_id})
     return resp.ok
 
 
-async def reject_login(host, port, login_challenge):
+def reject_login(host, port, login_challenge):
     resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/reject?login_challenge={login_challenge}',
                         json={})
     return resp.ok
 
 
-async def flush(host, port):
+def flush(host, port):
     test_logger.info("Running Flush...")
     resp = requests.post(f'http://{host}:{port}/oauth2/flush', json={})
     return resp.ok
 
 
 def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid offline'):
-    async def _login(client):
-        c = OAuth2Session(client_id=clients[0]['client_id'], client_secret=clients[0]['client_secret'],
+    def _login(client):
+        c = OAuth2Session(client_id=client['client_id'], client_secret=client['client_secret'],
                           scope=scope)
         uri, state = c.create_authorization_url(f'http://{host}:{port}/oauth2/auth',
                                                 redirect_uri='http://0.0.0.0:3000/login')
@@ -152,14 +153,23 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
 
     tasks = []
     logged_in_clients = []
-    for i in range(0, len(clients)):
-        tasks.append(asyncio.ensure_future(_login(clients[i])))
+    # for i in range(0, len(clients)):
+    #    tasks.append(asyncio.ensure_future(_login(clients[i])))
 
-    async def _inner(logged_in_clients):
-        logged_in_clients += [x for x in await asyncio.gather(*tasks) if x is not None]
+    # async def _inner(logged_in_clients):
+    #    logged_in_clients += [x for x in await asyncio.gather(*tasks) if x is not None]
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(_inner(logged_in_clients))
+    logged_in_clients = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+        futures = (executor.submit(_login, c) for c in clients)
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                logged_in_clients.append(future.result())
+            except:
+                pass
+
+    # loop = asyncio.get_event_loop()
+    # loop.run_until_complete(_inner(logged_in_clients))
 
     return logged_in_clients
 
@@ -220,31 +230,40 @@ def _tester(cycle, config, db, external_db, working_data):
 
     client_accept_tasks = []
 
-    for ca in clients_accept:
-        client_accept_tasks.append(asyncio.ensure_future(accept_login(host=config['host'], port=config['admin_port'],
-                                                                      login_challenge=ca["login_challenge"],
-                                                                      client_id=ca["client_id"])))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+        futures = (executor.submit(accept_login, host=config['host'],
+                                   port=config['admin_port'],
+                                   login_challenge=c["login_challenge"],
+                                   client_id=c["client_id"]) for c in clients_accept)
+
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                client_accept_tasks.append(future.result())
+            except:
+                pass
+
+    working_data['results'] = db_sizes = external_db.gen_hydra_report()
+    save_result_to_sqlite(db, 'after_client_login_accept', working_data)
+    test_logger.info(
+        f'Cycle: {cycle} | Action: After client login accept  | {datetime.now()} | db_size: {db_sizes}')
 
     client_reject_tasks = []
-    for cr in clients_reject:
-        client_reject_tasks.append(asyncio.ensure_future(reject_login(host=config['host'], port=config['admin_port'],
-                                                                      login_challenge=cr["login_challenge"])))
 
-    async def _inner():
-        t = await asyncio.gather(*client_accept_tasks)
-        working_data['results'] = db_sizes = external_db.gen_hydra_report()
-        save_result_to_sqlite(db, 'after_client_login_accept', working_data)
-        test_logger.info(
-            f'Cycle: {cycle} | Action: After client login accept  | {datetime.now()} | db_size: {db_sizes}')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+        futures = (executor.submit(reject_login, host=config['host'], port=config['admin_port'],
+                                   login_challenge=c["login_challenge"]) for c in clients_reject)
 
-        t2 = await asyncio.gather(*client_reject_tasks)
-        working_data['results'] = db_sizes = external_db.gen_hydra_report()
-        save_result_to_sqlite(db, 'after_client_login_reject', working_data)
-        test_logger.info(
-            f'Cycle: {cycle} | Action: After client login reject  | {datetime.now()} | db_size: {db_sizes}')
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                client_reject_tasks.append(future.result())
+            except:
+                pass
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(_inner())
+    working_data['results'] = db_sizes = external_db.gen_hydra_report()
+    save_result_to_sqlite(db, 'after_client_login_reject', working_data)
+    test_logger.info(
+        f'Cycle: {cycle} | Action: After client login reject  | {datetime.now()} | db_size: {db_sizes}')
+
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'before_client_timeout', working_data)
@@ -373,3 +392,7 @@ def tester(args, db):
             test_logger.info("Flush successful")
         else:
             test_logger.error("Flush failed")
+
+        working_data['results'] = db_sizes = external_db.gen_hydra_report()
+        save_result_to_sqlite(db, 'After flush', working_data)
+        test_logger.info(f'Cycle: {c} | Action: After flush  | {datetime.now()} | db_size: {db_sizes}')
