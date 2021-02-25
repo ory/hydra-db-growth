@@ -97,13 +97,13 @@ def initialise(url, clients=1000, max_time=100):
                                                      'grant_types': ['authorization_code', 'refresh_token'],
                                                      'scope': 'openid offline',
                                                      'response_types': ['code'],
-                                                     'redirect_uris': ['http://0.0.0.0:3000/login']})
+                                                     'redirect_uris': ['http://0.0.0.0:3000/login']}, timeout=5)
         if resp.status_code == 201:
             return {'client_id': client_id, 'client_secret': client_secret}
         else:
             return None
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
         futures = []
         for i in client_intervals:
             for y in range(0, i):
@@ -112,7 +112,8 @@ def initialise(url, clients=1000, max_time=100):
         for future in concurrent.futures.as_completed(futures):
             try:
                 oauth_clients.append(future.result())
-            except:
+            except Exception as e:
+                test_logger.error(e)
                 pass
 
     return oauth_clients
@@ -120,19 +121,19 @@ def initialise(url, clients=1000, max_time=100):
 
 def accept_login(host, port, login_challenge, client_id):
     resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/accept?login_challenge={login_challenge}',
-                        json={'subject': client_id})
+                        json={'subject': client_id}, timeout=5)
     return resp.ok
 
 
 def reject_login(host, port, login_challenge):
     resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/reject?login_challenge={login_challenge}',
-                        json={})
+                        json={}, timeout=5)
     return resp.ok
 
 
 def flush(host, port):
     test_logger.info("Running Flush...")
-    resp = requests.post(f'http://{host}:{port}/oauth2/flush', json={})
+    resp = requests.post(f'http://{host}:{port}/oauth2/flush', json={}, timeout=5)
     return resp.ok
 
 
@@ -143,7 +144,7 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
         uri, state = c.create_authorization_url(f'http://{host}:{port}/oauth2/auth',
                                                 redirect_uri='http://0.0.0.0:3000/login')
 
-        resp = requests.get(uri)
+        resp = requests.get(uri, timeout=5)
         if resp.ok:
             client['login_challenge'] = parse_qs(urlparse(resp.url).query)['login_challenge'][0]
             return client
@@ -160,12 +161,13 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
     #    logged_in_clients += [x for x in await asyncio.gather(*tasks) if x is not None]
 
     logged_in_clients = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
         futures = (executor.submit(_login, c) for c in clients)
         for future in concurrent.futures.as_completed(futures):
             try:
                 logged_in_clients.append(future.result())
-            except:
+            except Exception as e:
+                test_logger.error(e)
                 pass
 
     # loop = asyncio.get_event_loop()
@@ -230,7 +232,7 @@ def _tester(cycle, config, db, external_db, working_data):
 
     client_accept_tasks = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
         futures = (executor.submit(accept_login, host=config['host'],
                                    port=config['admin_port'],
                                    login_challenge=c["login_challenge"],
@@ -239,7 +241,8 @@ def _tester(cycle, config, db, external_db, working_data):
         for future in concurrent.futures.as_completed(futures):
             try:
                 client_accept_tasks.append(future.result())
-            except:
+            except Exception as e:
+                test_logger.error(e)
                 pass
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
@@ -249,14 +252,15 @@ def _tester(cycle, config, db, external_db, working_data):
 
     client_reject_tasks = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1000) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
         futures = (executor.submit(reject_login, host=config['host'], port=config['admin_port'],
                                    login_challenge=c["login_challenge"]) for c in clients_reject)
 
         for future in concurrent.futures.as_completed(futures):
             try:
                 client_reject_tasks.append(future.result())
-            except:
+            except Exception as e:
+                test_logger.error(e)
                 pass
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
@@ -387,12 +391,13 @@ def tester(args, db):
         working_data['registered_clients'] = external_db.get_registered_clients()
         test_logger.info(f'registered clients {working_data["registered_clients"]}')
         _tester(c, config, db, external_db, working_data)
-        ok = flush(config["host"], config["admin_port"])
-        if ok:
-            test_logger.info("Flush successful")
-        else:
-            test_logger.error("Flush failed")
+        if config['run_flush']:
+            ok = flush(config["host"], config["admin_port"])
+            if ok:
+                test_logger.info("Flush successful")
+            else:
+                test_logger.error("Flush failed")
 
-        working_data['results'] = db_sizes = external_db.gen_hydra_report()
-        save_result_to_sqlite(db, 'After flush', working_data)
-        test_logger.info(f'Cycle: {c} | Action: After flush  | {datetime.now()} | db_size: {db_sizes}')
+            working_data['results'] = db_sizes = external_db.gen_hydra_report()
+            save_result_to_sqlite(db, 'After flush', working_data)
+            test_logger.info(f'Cycle: {c} | Action: After flush  | {datetime.now()} | db_size: {db_sizes}')
