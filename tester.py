@@ -97,7 +97,7 @@ def initialise(url, clients=1000, max_time=100):
                                                      'grant_types': ['authorization_code', 'refresh_token'],
                                                      'scope': 'openid offline',
                                                      'response_types': ['code'],
-                                                     'redirect_uris': ['http://0.0.0.0:3000/login']}, timeout=5)
+                                                     'redirect_uris': ['http://0.0.0.0:3000/login']})
         if resp.status_code == 201:
             return {'client_id': client_id, 'client_secret': client_secret}
         else:
@@ -121,19 +121,19 @@ def initialise(url, clients=1000, max_time=100):
 
 def accept_login(host, port, login_challenge, client_id):
     resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/accept?login_challenge={login_challenge}',
-                        json={'subject': client_id}, timeout=5)
+                        json={'subject': client_id})
     return resp.ok
 
 
 def reject_login(host, port, login_challenge):
     resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/reject?login_challenge={login_challenge}',
-                        json={}, timeout=5)
+                        json={})
     return resp.ok
 
 
 def flush(host, port):
     test_logger.info("Running Flush...")
-    resp = requests.post(f'http://{host}:{port}/oauth2/flush', json={}, timeout=5)
+    resp = requests.post(f'http://{host}:{port}/oauth2/flush', json={})
     return resp.ok
 
 
@@ -144,7 +144,7 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
         uri, state = c.create_authorization_url(f'http://{host}:{port}/oauth2/auth',
                                                 redirect_uri='http://0.0.0.0:3000/login')
 
-        resp = requests.get(uri, timeout=5)
+        resp = requests.get(uri)
         if resp.ok:
             client['login_challenge'] = parse_qs(urlparse(resp.url).query)['login_challenge'][0]
             return client
