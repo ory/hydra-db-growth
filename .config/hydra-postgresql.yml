@@ -29,13 +29,13 @@ oidc:
 
 ttl:
   # Configures how long access tokens are valid.
-  access_token: 5m
+  access_token: 10m
   # Configures how long refresh tokens are valid. Set to -1 for refresh tokens to never expire.
-  refresh_token: 5m
+  refresh_token: 10m
   # Configures how long id tokens are valid.
-  id_token: 5m
+  id_token: 10m
   # Configures how long auth codes are valid.
-  auth_code: 5m
+  auth_code: 10m
   # Configures how long a user login and consent flow may take.
-  login_consent_request: 5m
+  login_consent_request: 30s
 

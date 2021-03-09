@@ -68,8 +68,17 @@ def error():
 
 @app.route("/login", methods=['GET'])
 def login():
-    challenge = request.args.get('login_challenge')
     return "You are getting the login screen"
+
+
+@app.route("/consent", methods=['GET'])
+def consent():
+    return "You are getting the consent screen"
+
+
+@app.route("/ping", methods=['GET'])
+def ping():
+    return {'status': 'ok'}
 
 
 def server(args, db):

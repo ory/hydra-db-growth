@@ -3,7 +3,7 @@ version: '3.7'
 services:
 
   hydra-postgresql:
-    image: oryd/hydra:v1.9.2
+    image: oryd/hydra:latest-sqlite
     restart: unless-stopped
     depends_on:
       - hydra-postgresql-migrate
@@ -23,7 +23,7 @@ services:
       - intranet
 
   hydra-postgresql-migrate:
-    image: oryd/hydra:v1.9.2
+    image: oryd/hydra:latest-sqlite
     restart: on-failure
     command:
       migrate -c /etc/.config/hydra/hydra-postgresql.yml sql -e --yes

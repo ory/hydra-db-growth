@@ -2,17 +2,31 @@ version: '3.7'
 
 services:
 
+  # this will aggregate all the data from the different services
+  hydra-growth-server:
+    image: hydra-db-growth:latest
+    ports:
+      - "3000:3000"
+    command:
+      server --host=0.0.0.0 --port=3000
+    networks:
+      - intranet
+
   hydra-postgres-growth:
+    depends_on:
+      - hydra-growth-server
     image: hydra-db-growth:latest
     command:
-      tester --host=hydra-postgresql --admin-port=6445 --public-port=6444 --clients=100 --failure-rate=97 --database=postgresql --db-host=postgresd --db-username=hydra --db-password=secret --db-name=hydra --service-name=hydra-postgresql
+      tester --host=hydra-postgresql --admin-port=6445 --public-port=6444 --clients=2 --failure-rate=1 --database=postgresql --db-host=postgresd --db-username=hydra --db-password=secret --db-name=hydra --service-name=hydra-postgresql --flask-host=hydra-growth-server --flask-port=3000
     networks:
       - intranet
 
   hydra-mysql-growth:
+    depends_on:
+      - hydra-growth-server
     image: hydra-db-growth:latest
     command:
-      tester --host=hydra-mysql --admin-port=5445 --public-port=5444 --clients=100 --failure-rate=97 --database=mysql --db-host=mysqld --db-username=root --db-password=secret --db-name=mysql --service-name=hydra-mysql
+      tester --host=hydra-mysql --admin-port=5445 --public-port=5444 --clients=100 --failure-rate=97 --database=mysql --db-host=mysqld --db-username=root --db-password=secret --db-name=mysql --service-name=hydra-mysql --flask-host=hydra-growth-server --flask-port=3000
     networks:
       - intranet
 

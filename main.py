@@ -52,6 +52,11 @@ def args_parser():
 
     tester_parser.add_argument("--run-flush", action='store_true', help="Run the flush command after each cycle")
 
+    tester_parser.add_argument("--flask-host", type=str, help="Specify the flask server host e.g. default: 127.0.0.1")
+
+    tester_parser.add_argument("--flask-port", type=int,
+                               help="Specify the flask server binding port e.g. default: 3000")
+
     server_parser.add_argument('--host', type=str,
                                help='Specify the server binding address e.g. default: 127.0.0.1')
     server_parser.add_argument('--port', type=int,

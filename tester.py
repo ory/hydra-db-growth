@@ -54,7 +54,7 @@ def save_result_to_sqlite(db,
         db.commit()
 
 
-def initialise(url, clients=1000, max_time=100):
+def initialise(config, url, clients=1000, max_time=100):
     """
     Create clients for the test to run on
     :param admin_client:
@@ -97,7 +97,9 @@ def initialise(url, clients=1000, max_time=100):
                                                      'grant_types': ['authorization_code', 'refresh_token'],
                                                      'scope': 'openid offline',
                                                      'response_types': ['code'],
-                                                     'redirect_uris': ['http://0.0.0.0:3000/login']})
+                                                     'redirect_uris': [
+                                                         f'http://{config["flask_host"]}:{config["flask_port"]}/login',
+                                                         f'http://{config["flask_host"]}:{config["flask_port"]}/consent']})
         if resp.status_code == 201:
             return {'client_id': client_id, 'client_secret': client_secret}
         else:
@@ -119,46 +121,84 @@ def initialise(url, clients=1000, max_time=100):
     return oauth_clients
 
 
-def accept_login(host, port, login_challenge, client_id):
-    resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/accept?login_challenge={login_challenge}',
-                        json={'subject': client_id})
+def accept_login(client, host, port):
+    resp = client['session'].put(
+        f'http://{host}:{port}/oauth2/auth/requests/login/accept?login_challenge={client["login_challenge"]}',
+        json={'subject': client['client_id']})
+    if resp.ok:
+        resp2 = client['session'].get(resp.json()['redirect_to'])
+        client['consent_challenge'] = parse_qs(urlparse(resp2.url).query)['consent_challenge'][0]
+        return client
+
+    return None
+
+
+def accept_consent(client, host, port):
+    resp = client['session'].put(
+        f'http://{host}:{port}/oauth2/auth/requests/consent/accept?consent_challenge={client["consent_challenge"]}',
+        json={})
+    if resp.ok:
+        resp2 = client['session'].get(resp.json()['redirect_to'])
+        if resp2.ok:
+            return True
+
+    return None
+
+
+def reject_login(client, host, port):
+    resp = client['session'].put(
+        f'http://{host}:{port}/oauth2/auth/requests/login/reject?login_challenge={client["login_challenge"]}',
+        json={})
     return resp.ok
 
 
-def reject_login(host, port, login_challenge):
-    resp = requests.put(f'http://{host}:{port}/oauth2/auth/requests/login/reject?login_challenge={login_challenge}',
-                        json={})
-    return resp.ok
-
-
-def flush(host, port):
+def flush(session, host, port):
     test_logger.info("Running Flush...")
-    resp = requests.post(f'http://{host}:{port}/oauth2/flush', json={})
+    resp = session.post(f'http://{host}:{port}/oauth2/flush', json={})
     return resp.ok
 
 
-def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid offline'):
+def initiate_clients_consent(clients, host='127.0.0.1', port=4445):
+    def _consent(client):
+        resp = client['session'].get(
+            f'http://{host}:{port}/oauth2/auth/requests/consent?consent_challenge={client["login_challenge"]}',
+            allow_redirects=False)
+        if resp.ok:
+            return client
+        return None
+
+    consent_clients = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+        futures = (executor.submit(_consent, c) for c in clients)
+
+        for futures in concurrent.futures.as_completed(futures):
+            try:
+                consent_clients.append(futures.result())
+            except Exception as e:
+                test_logger.error(e)
+                pass
+        return [x for x in consent_clients if x is not None]
+
+
+def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid offline',
+                           redirect='http://127.0.0.1:3000/login'):
     def _login(client):
+        session = requests.Session()
         c = OAuth2Session(client_id=client['client_id'], client_secret=client['client_secret'],
                           scope=scope)
         uri, state = c.create_authorization_url(f'http://{host}:{port}/oauth2/auth',
-                                                redirect_uri='http://0.0.0.0:3000/login')
+                                                redirect_uri=redirect)
 
-        resp = requests.get(uri)
+        resp = session.get(uri, allow_redirects=False)
+
         if resp.ok:
-            client['login_challenge'] = parse_qs(urlparse(resp.url).query)['login_challenge'][0]
+            client['login_challenge'] = parse_qs(urlparse(resp.headers.get('location')).query)['login_challenge'][0]
+            client['session'] = session
             return client
         else:
             test_logger.error('Login redirect failed for client_id: ', clients[0]['client_id'])
             return None
-
-    tasks = []
-    logged_in_clients = []
-    # for i in range(0, len(clients)):
-    #    tasks.append(asyncio.ensure_future(_login(clients[i])))
-
-    # async def _inner(logged_in_clients):
-    #    logged_in_clients += [x for x in await asyncio.gather(*tasks) if x is not None]
 
     logged_in_clients = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
@@ -169,9 +209,6 @@ def initiate_clients_login(clients, host='127.0.0.1', port=4444, scope='openid o
             except Exception as e:
                 test_logger.error(e)
                 pass
-
-    # loop = asyncio.get_event_loop()
-    # loop.run_until_complete(_inner(logged_in_clients))
 
     return logged_in_clients
 
@@ -190,7 +227,7 @@ def _tester(cycle, config, db, external_db, working_data):
             # since we are relying on external services, this could fail
             # so we wrap in a try-catch and wait
             test_logger.info("Initialising clients...")
-            oauth_clients = initialise(admin_url, clients=config["clients"],
+            oauth_clients = initialise(config, admin_url, clients=config["clients"],
                                        max_time=config["clients_max_time"])
 
             working_data['results'] = db_sizes = external_db.gen_hydra_report()
@@ -216,7 +253,9 @@ def _tester(cycle, config, db, external_db, working_data):
         test_logger.info('retrying...')
         time.sleep(wait_time)
 
-    oauth_clients = initiate_clients_login(clients=oauth_clients, host=config['host'], port=config['public_port'])
+    oauth_clients = initiate_clients_login(clients=oauth_clients, host=config['host'],
+                                           port=config['public_port'],
+                                           redirect=f'http://{config["flask_host"]}:{config["flask_port"]}/login')
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'client_login_init', working_data)
@@ -233,10 +272,10 @@ def _tester(cycle, config, db, external_db, working_data):
     client_accept_tasks = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = (executor.submit(accept_login, host=config['host'],
-                                   port=config['admin_port'],
-                                   login_challenge=c["login_challenge"],
-                                   client_id=c["client_id"]) for c in clients_accept)
+        futures = (executor.submit(accept_login,
+                                   client=c,
+                                   host=config['host'],
+                                   port=config['admin_port']) for c in clients_accept)
 
         for future in concurrent.futures.as_completed(futures):
             try:
@@ -245,16 +284,38 @@ def _tester(cycle, config, db, external_db, working_data):
                 test_logger.error(e)
                 pass
 
+        clients_accept = [x for x in client_accept_tasks if x is not None]
+
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_login_accept', working_data)
     test_logger.info(
         f'Cycle: {cycle} | Action: After client login accept  | {datetime.now()} | db_size: {db_sizes}')
 
+    consent_responses = initiate_clients_consent(clients=clients_accept, host=config['host'],
+                                                 port=config['admin_port'])
+
+    test_logger.info(consent_responses)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+        futures = (executor.submit(accept_consent,
+                                   client=c,
+                                   host=config['host'],
+                                   port=config['admin_port']) for c in clients_accept)
+
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                client_accept_tasks.append(future.result())
+            except Exception as e:
+                test_logger.error(e)
+                pass
+
     client_reject_tasks = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = (executor.submit(reject_login, host=config['host'], port=config['admin_port'],
-                                   login_challenge=c["login_challenge"]) for c in clients_reject)
+        futures = (executor.submit(reject_login,
+                                   client=c,
+                                   host=config['host'],
+                                   port=config['admin_port']) for c in clients_reject)
 
         for future in concurrent.futures.as_completed(futures):
             try:
@@ -267,7 +328,6 @@ def _tester(cycle, config, db, external_db, working_data):
     save_result_to_sqlite(db, 'after_client_login_reject', working_data)
     test_logger.info(
         f'Cycle: {cycle} | Action: After client login reject  | {datetime.now()} | db_size: {db_sizes}')
-
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'before_client_timeout', working_data)
@@ -282,6 +342,8 @@ def _tester(cycle, config, db, external_db, working_data):
 
 def tester(args, db):
     config = {
+        'flask_host': '127.0.0.1',
+        'flask_port': 3000,
         'run_flush': False,
         'service_name': 'hydra',
         'clients': 1000,
@@ -312,6 +374,12 @@ def tester(args, db):
         'password': '',
         'name': 'hydra',
         }
+
+    if args.flask_host:
+        config['flask_host'] = args.flask_host
+
+    if args.flask_port:
+        config['flask_port'] = args.flask_port
 
     if args.service_name:
         config['service_name'] = args.service_name
@@ -385,6 +453,12 @@ def tester(args, db):
         'size_unit': 'MB',
         'results': []
         }
+
+    while True:
+        resp = requests.get(f'http://{config["flask_host"]}:{config["flask_port"]}/ping')
+        if resp.ok:
+            break
+        time.sleep(2)
 
     for c in range(0, config["num_cycles"]):
         working_data['cycle'] = c
