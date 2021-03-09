@@ -2,3 +2,4 @@ results/
 scripts/
 .config/
 .docker/
+.build

@@ -1,5 +1,6 @@
 import concurrent.futures
 import logging
+import os
 import random
 import time
 import uuid
@@ -488,6 +489,12 @@ def tester(args, db):
 
     logging.info(f'db connection established {external_db is not None}')
 
+    if config["run_flush"]:
+        if os.path.isdir('.build'):
+            os.system("cd .build/hydra; git checkout db-growth; git pull")
+        else:
+            os.system("./scripts/build_hydra.sh")
+
     working_data = {
         'cycle': 0,
         'registered_clients': 0,
@@ -507,12 +514,18 @@ def tester(args, db):
         working_data['registered_clients'] = external_db.get_registered_clients()
         test_logger.info(f'registered clients {working_data["registered_clients"]}')
         _tester(c, config, db, external_db, working_data)
+
         if config['run_flush']:
-            ok = flush(config["host"], config["admin_port"])
-            if ok:
-                test_logger.info("Flush successful")
+            if args.database == 'postgresql':
+                db_driver = "postgres"
             else:
-                test_logger.error("Flush failed")
+                db_driver = "mysql"
+
+            os.environ[
+                'DSN'] = f'{db_driver}://{config["db"]["username"]}:{config["db"]["password"]}@{config["db"]["host"]}:{config["db"]["port"]}/{config["db"]["name"]}?sslmode=disable&max_conns=20&max_idle_conns=4'
+
+            ok = os.system(".build/hydra/hydra janitor -e")
+            test_logger.info(ok)
 
             working_data['results'] = db_sizes = external_db.gen_hydra_report()
             save_result_to_sqlite(db, 'After flush', working_data)
