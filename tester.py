@@ -308,7 +308,7 @@ def _tester(cycle, config, db, external_db, working_data):
     test_logger.info(
         f'Cycle: {cycle} | Action: After client consent init  | {datetime.now()} | db_size: {db_sizes}')
 
-    c = floor(len(oauth_clients) * (config['consent_failure_rate'] / 100))
+    c = floor(len(clients_accept) * (config['consent_failure_rate'] / 100))
     clients_reject_consent = clients_accept[0:c]
     clients_accept_consent = clients_accept[len(clients_reject_consent):len(clients_accept)]
 
