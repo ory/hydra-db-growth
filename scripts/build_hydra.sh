@@ -3,4 +3,4 @@ mkdir .build; cd .build
 git clone git@github.com:Benehiko/hydra.git
 cd hydra
 git checkout db-growth
-go build -o hydra
+go build -tags sqlite -o hydra
