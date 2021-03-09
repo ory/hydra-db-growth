@@ -17,7 +17,7 @@ services:
       - hydra-growth-server
     image: hydra-db-growth:latest
     command:
-      tester --host=hydra-postgresql --admin-port=6445 --public-port=6444 --clients=2 --failure-rate=1 --database=postgresql --db-host=postgresd --db-username=hydra --db-password=secret --db-name=hydra --service-name=hydra-postgresql --flask-host=hydra-growth-server --flask-port=3000
+      tester --host=hydra-postgresql --admin-port=6445 --public-port=6444 --clients=2 --login-failure-rate=90 --consent-failure-rate=90 --database=postgresql --db-host=postgresd --db-username=hydra --db-password=secret --db-name=hydra --service-name=hydra-postgresql --flask-host=hydra-growth-server --flask-port=3000
     networks:
       - intranet
 
@@ -26,7 +26,7 @@ services:
       - hydra-growth-server
     image: hydra-db-growth:latest
     command:
-      tester --host=hydra-mysql --admin-port=5445 --public-port=5444 --clients=100 --failure-rate=97 --database=mysql --db-host=mysqld --db-username=root --db-password=secret --db-name=mysql --service-name=hydra-mysql --flask-host=hydra-growth-server --flask-port=3000
+      tester --host=hydra-mysql --admin-port=5445 --public-port=5444 --clients=100 --login-failure-rate=90 --consent-failure-rate=90 --database=mysql --db-host=mysqld --db-username=root --db-password=secret --db-name=mysql --service-name=hydra-mysql --flask-host=hydra-growth-server --flask-port=3000
     networks:
       - intranet
 

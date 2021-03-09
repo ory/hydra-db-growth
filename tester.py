@@ -152,6 +152,14 @@ def reject_login(client, host, port):
     return resp.ok
 
 
+def reject_consent(client, host, port):
+    resp = client['session'].put(
+        f'http://{host}:{port}/oauth2/auth/requests/consent/reject?consent_challenge={client["consent_challenge"]}',
+        json={})
+    resp2 = client['session'].get(resp.json()['redirect_to'])
+    return resp2.ok
+
+
 def flush(session, host, port):
     test_logger.info("Running Flush...")
     resp = session.post(f'http://{host}:{port}/oauth2/flush', json={})
@@ -262,7 +270,7 @@ def _tester(cycle, config, db, external_db, working_data):
     test_logger.info(f'Cycle: {cycle} | Action: After client login init  | {datetime.now()} | db_size: {db_sizes}')
 
     oauth_clients = [x for x in oauth_clients if 'login_challenge' in x]
-    c = floor(len(oauth_clients) * (config['failure_rate'] / 100))
+    c = floor(len(oauth_clients) * (config['login_failure_rate'] / 100))
     clients_reject = oauth_clients[0:c]
     clients_accept = oauth_clients[len(clients_reject):len(oauth_clients)]
     clients_timeout = clients_reject[0:floor(len(clients_reject) * (config['timeout_reject_ratio'] / 100))]
@@ -291,23 +299,53 @@ def _tester(cycle, config, db, external_db, working_data):
     test_logger.info(
         f'Cycle: {cycle} | Action: After client login accept  | {datetime.now()} | db_size: {db_sizes}')
 
-    consent_responses = initiate_clients_consent(clients=clients_accept, host=config['host'],
-                                                 port=config['admin_port'])
+    _ = initiate_clients_consent(clients=clients_accept, host=config['host'],
+                                 port=config['admin_port'])
 
-    test_logger.info(consent_responses)
+    working_data['results'] = db_sizes = external_db.gen_hydra_report()
+    save_result_to_sqlite(db, 'after_client_consent_init', working_data)
+    test_logger.info(
+        f'Cycle: {cycle} | Action: After client consent init  | {datetime.now()} | db_size: {db_sizes}')
+
+    c = floor(len(oauth_clients) * (config['consent_failure_rate'] / 100))
+    clients_reject_consent = clients_accept[0:c]
+    clients_accept_consent = clients_accept[len(clients_reject_consent):len(clients_accept)]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+        futures = (executor.submit(reject_consent,
+                                   client=c,
+                                   host=config['host'],
+                                   port=config['admin_port']) for c in clients_reject_consent)
+
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                _ = future.result()
+            except Exception as e:
+                test_logger.error(e)
+                pass
+
+    working_data['results'] = db_sizes = external_db.gen_hydra_report()
+    save_result_to_sqlite(db, 'after_client_consent_reject', working_data)
+    test_logger.info(
+        f'Cycle: {cycle} | Action: After client consent reject  | {datetime.now()} | db_size: {db_sizes}')
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
         futures = (executor.submit(accept_consent,
                                    client=c,
                                    host=config['host'],
-                                   port=config['admin_port']) for c in clients_accept)
+                                   port=config['admin_port']) for c in clients_accept_consent)
 
         for future in concurrent.futures.as_completed(futures):
             try:
-                client_accept_tasks.append(future.result())
+                _ = future.result()
             except Exception as e:
                 test_logger.error(e)
                 pass
+
+    working_data['results'] = db_sizes = external_db.gen_hydra_report()
+    save_result_to_sqlite(db, 'after_client_consent_accept', working_data)
+    test_logger.info(
+        f'Cycle: {cycle} | Action: After client consent accept  | {datetime.now()} | db_size: {db_sizes}')
 
     client_reject_tasks = []
 
@@ -348,7 +386,8 @@ def tester(args, db):
         'service_name': 'hydra',
         'clients': 1000,
         'clients_max_time': 100,
-        'failure_rate': 90,
+        'login_failure_rate': 90,
+        'consent_failure_rate': 90,
         'timeout_reject_ratio': 90,
         'ttl_timeout': 60,
         'run_for': 5,
@@ -413,8 +452,11 @@ def tester(args, db):
     if args.clients:
         config["clients"] = args.clients
 
-    if args.failure_rate:
-        config["failure_rate"] = args.failure_rate
+    if args.login_failure_rate:
+        config["login_failure_rate"] = args.login_failure_rate
+
+    if args.consent_failure_rate:
+        config["consent_failure_rate"] = args.consent_failure_rate
 
     if args.timeout_reject_ratio:
         config["timeout_reject_ratio"] = args.timeout_reject_ratio
