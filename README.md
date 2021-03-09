@@ -7,8 +7,8 @@ issue: https://github.com/ory/hydra/issues/1574.
 
 - [X] Graphs (time-series plot) of database size and other meta info
 - [X] Easy Failure rate adjustment via cli
-- [ ] Maybe extend the software to allow more tests of the different use cases of Hydra (currently login request failure
-  is observed)
+- [ ] Maybe extend the software to allow more tests of the different use cases of Hydra in respects to the database (
+  currently login/consent requests are observed)
 
 ### What seems to be the issue
 
@@ -18,17 +18,18 @@ and `hydra_oauth2_authentication_session` to explode in size.
 ### What is failure rate?
 
 There are two failure rates:
+
 - login-failure-rate
 - consent-failure-rate
 
-Failure rate is the rate at which clients do not complete the login/consent flow -
-this could be in timing out or simply rejecting the flow.
+Failure rate is the rate at which clients do not complete the login/consent flow - this could be in timing out or simply
+rejecting the flow.
 
 According to https://github.com/ory/hydra/issues/1574#issuecomment-771573626 it seems out of 4000 login requests only
 100 complete.
 
-This only has an effect on the size of tables with the suffix `_handled` since
-no login/consent is completing, these tables stay relatively small.
+This only has an effect on the size of tables with the suffix `_handled` since no login/consent is completing, these
+tables stay relatively small.
 
 On the `_authentication_request` table this seems to have a very small effect in its growth.
 
