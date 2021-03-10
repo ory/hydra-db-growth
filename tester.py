@@ -517,12 +517,11 @@ def tester(args, db):
 
         if config['run_flush']:
             if args.database == 'postgresql':
-                db_driver = "postgres"
+                os.environ[
+                    'DSN'] = f'postgres://{config["db"]["username"]}:{config["db"]["password"]}@{config["db"]["host"]}:{config["db"]["port"]}/{config["db"]["name"]}?sslmode=disable&max_conns=20&max_idle_conns=4'
             else:
-                db_driver = "mysql"
-
-            os.environ[
-                'DSN'] = f'{db_driver}://{config["db"]["username"]}:{config["db"]["password"]}@{config["db"]["host"]}:{config["db"]["port"]}/{config["db"]["name"]}?sslmode=disable&max_conns=20&max_idle_conns=4'
+                os.environ[
+                    'DSN'] = f'mysql://{config["db"]["username"]}:{config["db"]["password"]}@tcp({config["db"]["host"]}:{config["db"]["port"]})/{config["db"]["name"]}?max_conns=20&max_idle_conns=4'
 
             ok = os.system(".build/hydra/hydra janitor -e")
             test_logger.info(ok)
