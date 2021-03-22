@@ -37,5 +37,5 @@ ttl:
   # Configures how long auth codes are valid.
   auth_code: 10m
   # Configures how long a user login and consent flow may take.
-  login_consent_request: 30s
+  login_consent_request: 20s
 
