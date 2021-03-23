@@ -11,9 +11,12 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from authlib.integrations.requests_client import OAuth2Session
 
+import hydra
+import utils
 from database.database import DatabaseController
 from database.mysql import MysqlController
 from database.postgresql import PostgresqlController
+from hydra.hydra_http_client import accept_consent, reject_consent, accept_login, reject_login
 
 test_logger = logging.getLogger('tester')
 
@@ -120,51 +123,6 @@ def initialise(config, url, clients=1000, max_time=100):
                 pass
 
     return oauth_clients
-
-
-def accept_login(client, host, port):
-    resp = client['session'].put(
-        f'http://{host}:{port}/oauth2/auth/requests/login/accept?login_challenge={client["login_challenge"]}',
-        json={'subject': client['client_id']})
-    if resp.ok:
-        resp2 = client['session'].get(resp.json()['redirect_to'])
-        client['consent_challenge'] = parse_qs(urlparse(resp2.url).query)['consent_challenge'][0]
-        return client
-
-    return None
-
-
-def accept_consent(client, host, port):
-    resp = client['session'].put(
-        f'http://{host}:{port}/oauth2/auth/requests/consent/accept?consent_challenge={client["consent_challenge"]}',
-        json={})
-    if resp.ok:
-        resp2 = client['session'].get(resp.json()['redirect_to'])
-        if resp2.ok:
-            return True
-
-    return None
-
-
-def reject_login(client, host, port):
-    resp = client['session'].put(
-        f'http://{host}:{port}/oauth2/auth/requests/login/reject?login_challenge={client["login_challenge"]}',
-        json={})
-    return resp.ok
-
-
-def reject_consent(client, host, port):
-    resp = client['session'].put(
-        f'http://{host}:{port}/oauth2/auth/requests/consent/reject?consent_challenge={client["consent_challenge"]}',
-        json={})
-    resp2 = client['session'].get(resp.json()['redirect_to'])
-    return resp2.ok
-
-
-def flush(session, host, port):
-    test_logger.info("Running Flush...")
-    resp = session.post(f'http://{host}:{port}/oauth2/flush', json={})
-    return resp.ok
 
 
 def initiate_clients_consent(clients, host='127.0.0.1', port=4445):
@@ -278,22 +236,10 @@ def _tester(cycle, config, db, external_db, working_data):
     # clients rejecting the auth would probably be less than those timing out (or never completing the request)
     clients_reject = clients_reject[len(clients_timeout):len(clients_reject)]
 
-    client_accept_tasks = []
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = (executor.submit(accept_login,
-                                   client=c,
-                                   host=config['host'],
-                                   port=config['admin_port']) for c in clients_accept)
-
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                client_accept_tasks.append(future.result())
-            except Exception as e:
-                test_logger.error(e)
-                pass
-
-        clients_accept = [x for x in client_accept_tasks if x is not None]
+    concurrent = utils.Concurrent(max_workers=100)
+    [concurrent.add_future(accept_login, client=c, host=config['host'], port=['admin_port']) for c in clients_accept]
+    client_accept_tasks = concurrent.run()
+    clients_accept = [x for x in client_accept_tasks if x is not None]
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_login_accept', working_data)
@@ -312,56 +258,27 @@ def _tester(cycle, config, db, external_db, working_data):
     clients_reject_consent = clients_accept[0:c]
     clients_accept_consent = clients_accept[len(clients_reject_consent):len(clients_accept)]
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = (executor.submit(reject_consent,
-                                   client=c,
-                                   host=config['host'],
-                                   port=config['admin_port']) for c in clients_reject_consent)
-
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                _ = future.result()
-            except Exception as e:
-                test_logger.error(e)
-                pass
+    concurrent = utils.Concurrent(max_workers=100)
+    [concurrent.add_future(reject_consent, client=c, host=config['host'], port=config['admin_port']) for c in clients_reject_consent]
+    concurrent.run()
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_consent_reject', working_data)
     test_logger.info(
         f'Cycle: {cycle} | Action: After client consent reject  | {datetime.now()} | db_size: {db_sizes}')
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = (executor.submit(accept_consent,
-                                   client=c,
-                                   host=config['host'],
-                                   port=config['admin_port']) for c in clients_accept_consent)
-
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                _ = future.result()
-            except Exception as e:
-                test_logger.error(e)
-                pass
+    concurrent = utils.Concurrent(max_workers=100)
+    [concurrent.add_future(accept_consent, client=c, host=config['host'], port=config['admin_port']) for c in clients_accept_consent]
+    concurrent.run()
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_consent_accept', working_data)
     test_logger.info(
         f'Cycle: {cycle} | Action: After client consent accept  | {datetime.now()} | db_size: {db_sizes}')
 
-    client_reject_tasks = []
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-        futures = (executor.submit(reject_login,
-                                   client=c,
-                                   host=config['host'],
-                                   port=config['admin_port']) for c in clients_reject)
-
-        for future in concurrent.futures.as_completed(futures):
-            try:
-                client_reject_tasks.append(future.result())
-            except Exception as e:
-                test_logger.error(e)
-                pass
+    concurrent = utils.Concurrent(max_workers=100)
+    [concurrent.add_future(reject_login, client=c, host=config['host'], port=config['admin_port']) for c in clients_reject]
+    concurrent.run()
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_login_reject', working_data)
