@@ -1,8 +1,10 @@
 import logging
+import os
 from datetime import datetime
 
 import database
 import utils
+from hydra.hydra_cli_client import flush
 from hydra.hydra_http_client import create_client, health, init_login, accept_login, init_consent, reject_login, reject_consent
 
 logger = logging.getLogger('tester')
@@ -11,10 +13,10 @@ logger = logging.getLogger('tester')
 class Tester:
 
     def __init__(self, config, db, external_db, working_data, concurrency_workers=100):
-        self.config = config
-        self.db = db
-        self.external_db = external_db
-        self.working_data = working_data
+        self._config = config
+        self._db = db
+        self._external_db = external_db
+        self._working_data = working_data
         self.workers = concurrency_workers
 
     @property
@@ -91,3 +93,16 @@ class Tester:
         logger.info(f'SIZE {self.working_data["results"]}')
         database.save_result_to_sqlite(self.db, action, self.working_data)
         logger.info(f'Cycle: {self.working_data["cycle"]} | Action: {action} | {datetime.now()} | db_size: {db_sizes}')
+
+    def registered_clients(self):
+        self.working_data['registered_clients'] = self.external_db.get_registered_clients()
+        logger.info(f'registered clients {self.working_data["registered_clients"]}')
+
+    def run_flush(self):
+        if self.config['run_flush']:
+            ok = os.system(".build/hydra/hydra janitor -e")
+            logger.info(ok)
+            flush(self.external_db.get_dsn(), True, True)
+            self.generate_report('after_flush')
+        else:
+            logger.warning("flush skipped by config")
