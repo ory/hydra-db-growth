@@ -18,3 +18,6 @@ class DatabaseController:
 
     def get_registered_clients(self):
         return self.database.get_registered_clients()[0]
+
+    def get_dsn(self):
+        return self.database.dsn

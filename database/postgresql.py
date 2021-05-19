@@ -11,6 +11,7 @@ class PostgresqlController:
                                'name': "hydra", 'username': "hydra", 'password': "secret"}
 
         self.conn = self._pg_connection()
+        self._dsn = f'postgres://{self.connection["username"]}:{self.connection["password"]}@{self.connection["host"]}:{self.connection["port"]}/{self.connection["name"]}?sslmode=disable&max_conns=20&max_idle_conns=4'
 
     def _pg_connection(self):
         return psycopg2.connect(user=self.connection['username'],
@@ -36,3 +37,7 @@ class PostgresqlController:
             "SELECT COUNT(*) FROM hydra_client"
             )
         return cursor.fetchone()
+
+    @property
+    def dsn(self):
+        return self._dsn

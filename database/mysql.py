@@ -11,6 +11,7 @@ class MysqlController:
                                'username': "root", 'password': "secret"}
 
         self.conn = self._mysql_connection()
+        self.dsn = f'mysql://{self.connection["username"]}:{self.connection["password"]}@tcp({self.connection["host"]}:{self.connection["port"]})/{self.connection["name"]}?max_conns=20&max_idle_conns=4'
 
     def _mysql_connection(self):
         return mysql.connector.connect(user=self.connection['username'],
@@ -36,3 +37,7 @@ class MysqlController:
             "SELECT COUNT(*) FROM hydra_client"
             )
         return cursor.fetchone()
+
+    @property
+    def dsn(self):
+        return self._dsn
