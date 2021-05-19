@@ -237,7 +237,7 @@ def _tester(cycle, config, db, external_db, working_data):
     clients_reject = clients_reject[len(clients_timeout):len(clients_reject)]
 
     concurrent = utils.Concurrent(max_workers=100)
-    [concurrent.add_future(accept_login, client=c, host=config['host'], port=['admin_port']) for c in clients_accept]
+    [concurrent.add_future(accept_login, client=c, host=config['host'], port=config['admin_port']) for c in clients_accept]
     client_accept_tasks = concurrent.run()
     clients_accept = [x for x in client_accept_tasks if x is not None]
 
