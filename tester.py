@@ -11,19 +11,20 @@ from urllib.parse import urlparse, parse_qs
 import requests
 from authlib.integrations.requests_client import OAuth2Session
 
-import hydra
 import utils
 from database.database import DatabaseController
 from database.mysql import MysqlController
 from database.postgresql import PostgresqlController
 from hydra.hydra_http_client import accept_consent, reject_consent, accept_login, reject_login
+from tests import Tester, DBGrowth
 
 test_logger = logging.getLogger('tester')
 
 
 def save_result_to_sqlite(db,
                           action,
-                          data={'cycle': 0, 'registered_clients': 0, 'service': 'hydra', 'size_unit': 'MB', 'results': []}):
+                          data={'cycle': 0, 'registered_clients': 0, 'service': 'hydra', 'size_unit': 'MB',
+                                'results': []}):
     cursor = db.cursor()
 
     try:
@@ -236,9 +237,10 @@ def _tester(cycle, config, db, external_db, working_data):
     # clients rejecting the auth would probably be less than those timing out (or never completing the request)
     clients_reject = clients_reject[len(clients_timeout):len(clients_reject)]
 
-    concurrent = utils.Concurrent(max_workers=100)
-    [concurrent.add_future(accept_login, client=c, host=config['host'], port=config['admin_port']) for c in clients_accept]
-    client_accept_tasks = concurrent.run()
+    c = utils.Concurrent(max_workers=100)
+    [c.add_future(accept_login, client=client, host=config['host'], port=config['admin_port']) for client in
+     clients_accept]
+    client_accept_tasks = c.run()
     clients_accept = [x for x in client_accept_tasks if x is not None]
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
@@ -258,27 +260,30 @@ def _tester(cycle, config, db, external_db, working_data):
     clients_reject_consent = clients_accept[0:c]
     clients_accept_consent = clients_accept[len(clients_reject_consent):len(clients_accept)]
 
-    concurrent = utils.Concurrent(max_workers=100)
-    [concurrent.add_future(reject_consent, client=c, host=config['host'], port=config['admin_port']) for c in clients_reject_consent]
-    concurrent.run()
+    c = utils.Concurrent(max_workers=100)
+    [c.add_future(reject_consent, client=client, host=config['host'], port=config['admin_port']) for client in
+     clients_reject_consent]
+    c.run()
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_consent_reject', working_data)
     test_logger.info(
         f'Cycle: {cycle} | Action: After client consent reject  | {datetime.now()} | db_size: {db_sizes}')
 
-    concurrent = utils.Concurrent(max_workers=100)
-    [concurrent.add_future(accept_consent, client=c, host=config['host'], port=config['admin_port']) for c in clients_accept_consent]
-    concurrent.run()
+    c = utils.Concurrent(max_workers=100)
+    [c.add_future(accept_consent, client=client, host=config['host'], port=config['admin_port']) for client in
+     clients_accept_consent]
+    c.run()
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_consent_accept', working_data)
     test_logger.info(
         f'Cycle: {cycle} | Action: After client consent accept  | {datetime.now()} | db_size: {db_sizes}')
 
-    concurrent = utils.Concurrent(max_workers=100)
-    [concurrent.add_future(reject_login, client=c, host=config['host'], port=config['admin_port']) for c in clients_reject]
-    concurrent.run()
+    c = utils.Concurrent(max_workers=100)
+    [c.add_future(reject_login, client=client, host=config['host'], port=config['admin_port']) for client in
+     clients_reject]
+    c.run()
 
     working_data['results'] = db_sizes = external_db.gen_hydra_report()
     save_result_to_sqlite(db, 'after_client_login_reject', working_data)
@@ -314,7 +319,7 @@ def tester(args, db):
         'admin_port': '4445',
         'public_port': '4444',
         'db': {},
-        }
+    }
 
     postgresql_configs = {
         'host': '127.0.0.1',
@@ -322,7 +327,7 @@ def tester(args, db):
         'username': 'postgres',
         'password': '',
         'name': 'hydra',
-        }
+    }
 
     mysql_configs = {
         'host': '127.0.0.1',
@@ -330,7 +335,7 @@ def tester(args, db):
         'username': 'root',
         'password': '',
         'name': 'hydra',
-        }
+    }
 
     if args.flask_host:
         config['flask_host'] = args.flask_host
@@ -418,13 +423,15 @@ def tester(args, db):
         'service': config['service_name'],
         'size_unit': 'MB',
         'results': []
-        }
+    }
 
-    while True:
-        resp = requests.get(f'http://{config["flask_host"]}:{config["flask_port"]}/ping')
-        if resp.ok:
-            break
-        time.sleep(2)
+    t = Tester(config=config, db=db, external_db=external_db, working_data=working_data, concurrency_workers=100)
+
+    t.webserver_health()
+
+    db_growth = DBGrowth(tester=t)
+    db_growth.run()
+    exit(0)
 
     for c in range(0, config["num_cycles"]):
         working_data['cycle'] = c
