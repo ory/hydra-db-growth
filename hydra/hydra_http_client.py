@@ -8,7 +8,7 @@ from urllib.parse import urlparse, parse_qs
 hydra_logger = logging.getLogger('hydra')
 
 
-def init_login(client, host, port, scope, redirect):
+def init_login(client, host, port, scope='openid offline', redirect='http://127.0.0.1:3000/login'):
     client['session'] = requests.Session()
     c = OAuth2Session(client_id=client['client_id'], client_secret=client['client_secret'],
                       scope=scope)

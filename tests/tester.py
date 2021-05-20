@@ -2,10 +2,13 @@ import logging
 import os
 from datetime import datetime
 
+import requests
+
 import database
 import utils
 from hydra.hydra_cli_client import flush
-from hydra.hydra_http_client import create_client, health, init_login, accept_login, init_consent, reject_login, reject_consent
+from hydra.hydra_http_client import create_client, health, init_login, accept_login, init_consent, reject_login, \
+    reject_consent
 
 logger = logging.getLogger('tester')
 
@@ -35,6 +38,24 @@ class Tester:
     def working_data(self):
         return self._working_data
 
+    def webserver_health(self):
+        wait_time = 2
+        max_time = 100
+
+        while True:
+            resp = requests.get(f'http://{self.config["flask_host"]}:{self.config["flask_port"]}/ping')
+            if resp.ok:
+                break
+
+            wait_time *= 2
+            if wait_time > max_time:
+                logger.error(
+                    f'Ending tester due to initialisation failure. Wait time has exceeded max_time: '
+                    f'({wait_time} > {max_time})')
+                raise Exception(
+                    f'could not connect to webserver instance on http://{self.config["flask_host"]}:{self.config["flask_port"]}/ping)'
+                )
+
     def patience_init(self):
         wait_time = 2
         max_time = 100
@@ -53,7 +74,7 @@ class Tester:
     def initialise_clients(self):
         concurrent = utils.Concurrent(max_workers=self.workers)
         [concurrent.add_future(create_client, self.config, self.config['host'], self.config['admin_port']) for i in
-         self.config["clients"]]
+         range(0, self.config["clients"])]
         return concurrent.run()
 
     def initialise_logins(self, clients):
